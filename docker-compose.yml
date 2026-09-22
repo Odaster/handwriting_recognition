@@ -1,0 +1,9 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      OCR_BACKEND: easyocr
+      OCR_LANGUAGES: ru,en
+      MAX_UPLOAD_MB: "10"
