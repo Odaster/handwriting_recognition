@@ -23,7 +23,7 @@ A Python web app that converts Russian handwriting from photos and scans into ed
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m app
+python3 -m app
 ```
 
 Откройте [http://127.0.0.1:8000](http://127.0.0.1:8000).
@@ -33,7 +33,7 @@ python -m app
 Запуск без моделей (демо-текст для разработки):
 
 ```bash
-OCR_BACKEND=fake python -m app
+OCR_BACKEND=fake python3 -m app
 ```
 
 ## Переменные окружения

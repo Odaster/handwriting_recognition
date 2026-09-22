@@ -10,10 +10,10 @@ test:
 	pytest
 
 run:
-	python -m app
+	python3 -m app
 
 run-fake:
-	OCR_BACKEND=fake python -m app
+	OCR_BACKEND=fake python3 -m app
 
 docker:
 	docker build -t handwriting-recognition .
