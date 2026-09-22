@@ -12,6 +12,7 @@ const copyButton = document.getElementById("copy");
 const downloadButton = document.getElementById("download");
 
 let selectedFile = null;
+let previewUrl = null;
 
 function setStatus(message, kind = "") {
   statusEl.textContent = message;
@@ -30,7 +31,11 @@ function useFile(file) {
   selectedFile = file;
   recognizeButton.disabled = false;
   filename.textContent = file.name;
-  preview.src = URL.createObjectURL(file);
+  if (previewUrl) {
+    URL.revokeObjectURL(previewUrl);
+  }
+  previewUrl = URL.createObjectURL(file);
+  preview.src = previewUrl;
   previewWrap.hidden = false;
   setStatus("Файл выбран. Нажмите «Распознать».");
 }
@@ -98,8 +103,14 @@ copyButton.addEventListener("click", async () => {
   if (!result.value) {
     return;
   }
-  await navigator.clipboard.writeText(result.value);
-  setStatus("Текст скопирован.", "ok");
+  try {
+    await navigator.clipboard.writeText(result.value);
+    setStatus("Текст скопирован.", "ok");
+  } catch {
+    result.select();
+    document.execCommand("copy");
+    setStatus("Текст выделен — скопируйте его вручную.", "");
+  }
 });
 
 downloadButton.addEventListener("click", () => {
@@ -109,8 +120,9 @@ downloadButton.addEventListener("click", () => {
   const blob = new Blob([result.value], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
+  const sourceName = (selectedFile?.name || "handwriting").replace(/\.[^.]+$/, "");
   link.href = url;
-  link.download = "recognized.txt";
+  link.download = `${sourceName}.txt`;
   link.click();
   URL.revokeObjectURL(url);
 });

@@ -1,11 +1,11 @@
-"""Настройки приложения."""
+"""Настройки приложения из переменных окружения."""
 
 from __future__ import annotations
 
 import os
 
 APP_NAME = "Распознавание рукописного текста"
-APP_VERSION = "0.1.0"
+APP_VERSION = "1.0.0"
 
 
 def _env(*names: str, default: str) -> str:
@@ -28,9 +28,11 @@ def _max_upload_bytes() -> int:
 
 
 MAX_UPLOAD_BYTES = _max_upload_bytes()
+OCR_MAX_SIDE = int(_env("OCR_MAX_SIDE", default="3000"))
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 ALLOWED_CONTENT_TYPES = {
     "image/jpeg",
+    "image/jpg",
     "image/png",
     "image/webp",
     "image/bmp",
@@ -45,3 +47,5 @@ OCR_LANGUAGES = [
 ]
 OCR_BACKEND = _env("OCR_BACKEND", "OCR_ENGINE", default="easyocr").strip().lower()
 OCR_USE_GPU = _as_bool(_env("OCR_USE_GPU", "OCR_GPU", default="0"))
+HOST = _env("HOST", default="0.0.0.0")
+PORT = int(_env("PORT", default="8000"))

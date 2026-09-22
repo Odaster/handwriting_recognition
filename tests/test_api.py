@@ -25,10 +25,19 @@ def test_index_page(client):
     assert "Распознать" in response.text
 
 
-def test_static_css(client):
-    response = client.get("/static/styles.css")
-    assert response.status_code == 200
-    assert "dropzone" in response.text
+def test_static_assets(client):
+    css = client.get("/static/styles.css")
+    js = client.get("/static/app.js")
+    assert css.status_code == 200
+    assert js.status_code == 200
+    assert "dropzone" in css.text
+    assert "/api/recognize" in js.text
+
+
+def test_ui_has_copy_and_download(client):
+    html = client.get("/").text
+    assert "Копировать" in html
+    assert "Скачать .txt" in html
 
 
 def test_recognize_success(client):
@@ -87,6 +96,16 @@ def test_no_text_found():
     )
     assert response.status_code == 422
     assert "не найден" in response.json()["detail"].lower()
+
+
+def test_too_large_file_rejected(client, monkeypatch):
+    monkeypatch.setattr("app.preprocess.MAX_UPLOAD_BYTES", 32)
+    response = client.post(
+        "/api/recognize",
+        files={"file": ("note.png", make_png_bytes(), "image/png")},
+    )
+    assert response.status_code == 400
+    assert "большой" in response.json()["detail"]
 
 
 def test_jpeg_upload(client):

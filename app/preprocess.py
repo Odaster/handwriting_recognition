@@ -8,7 +8,12 @@ import cv2
 import numpy as np
 from PIL import Image, ImageOps
 
-from app.config import ALLOWED_CONTENT_TYPES, ALLOWED_EXTENSIONS, MAX_UPLOAD_BYTES
+from app.config import (
+    ALLOWED_CONTENT_TYPES,
+    ALLOWED_EXTENSIONS,
+    MAX_UPLOAD_BYTES,
+    OCR_MAX_SIDE,
+)
 
 
 class ImageValidationError(ValueError):
@@ -45,7 +50,18 @@ def load_image(data: bytes) -> np.ndarray:
 
     if array.size == 0:
         raise ImageValidationError("Изображение пустое.")
-    return array
+    return downscale(array, OCR_MAX_SIDE)
+
+
+def downscale(image: np.ndarray, max_side: int = OCR_MAX_SIDE) -> np.ndarray:
+    """Уменьшает огромные сканы, чтобы не исчерпать память на CPU."""
+    height, width = image.shape[:2]
+    longest = max(height, width)
+    if longest <= max_side:
+        return image
+    scale = max_side / longest
+    new_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+    return cv2.resize(image, new_size, interpolation=cv2.INTER_AREA)
 
 
 def enhance_for_ocr(image: np.ndarray) -> np.ndarray:

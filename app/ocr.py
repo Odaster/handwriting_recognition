@@ -137,6 +137,6 @@ def create_engine(backend: str | None = None) -> OCREngine:
     name = (backend or OCR_BACKEND).strip().lower()
     if name in {"fake", "mock", "test"}:
         return FakeOCREngine()
-    if name in {"easyocr", "easy"}:
+    if name in {"easyocr", "easy", "real", "default"}:
         return EasyOCREngine()
     raise ValueError(f"Неизвестный OCR-движок: {name}")

@@ -44,7 +44,8 @@ OCR_BACKEND=fake python -m app
 | `OCR_LANGUAGES` | `ru,en` | Языки EasyOCR |
 | `OCR_USE_GPU` | `0` | `1`, если есть CUDA (синоним: `OCR_GPU`) |
 | `MAX_UPLOAD_BYTES` | `10485760` | Лимит размера файла (или `MAX_UPLOAD_MB`) |
-| `PORT` | `8000` | Порт сервера |
+| `OCR_MAX_SIDE` | `3000` | Длинная сторона изображения после уменьшения |
+| `HOST` / `PORT` | `0.0.0.0` / `8000` | Адрес сервера |
 
 ## API
 
@@ -88,3 +89,9 @@ app/            FastAPI-приложение и OCR
 app/static/     Веб-интерфейс
 tests/          Pytest
 ```
+
+## English
+
+Install dependencies with `pip install -r requirements.txt`, then run `python -m app` and open http://127.0.0.1:8000. Upload a photo of handwritten Russian text to get a digital transcript you can copy or download as `.txt`.
+
+The first EasyOCR run downloads language models (hundreds of MB). Tests never do that: `pip install -r requirements-test.txt && pytest` uses a fake OCR engine. For a UI demo without models, start the server with `OCR_BACKEND=fake`.

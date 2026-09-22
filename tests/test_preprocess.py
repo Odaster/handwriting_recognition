@@ -63,3 +63,12 @@ def test_prepare_image_can_skip_enhance():
     raw = load_image(_png(color=(255, 0, 0)))
     prepared = prepare_image(_png(color=(255, 0, 0)), enhance=False)
     assert np.array_equal(raw, prepared)
+
+
+def test_downscale_reduces_huge_image():
+    from app.preprocess import downscale
+
+    huge = np.zeros((4000, 2000, 3), dtype=np.uint8)
+    out = downscale(huge, max_side=1000)
+    assert max(out.shape[0], out.shape[1]) == 1000
+    assert out.shape[2] == 3

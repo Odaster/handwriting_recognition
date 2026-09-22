@@ -42,3 +42,11 @@ def test_create_engine_fake(monkeypatch):
 def test_create_engine_unknown():
     with pytest.raises(ValueError, match="Неизвестный"):
         create_engine("tesseract-from-mars")
+
+
+def test_easyocr_engine_is_lazy():
+    from app.ocr import EasyOCREngine
+
+    engine = create_engine("easyocr")
+    assert isinstance(engine, EasyOCREngine)
+    assert engine._reader is None
