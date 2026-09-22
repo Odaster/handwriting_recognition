@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Рукопись → текст</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <p class="eyebrow">OCR · русский рукописный текст</p>
+        <h1>Сфотографируйте страницу — получите электронный текст</h1>
+        <p class="lede">
+          Приложение принимает фото или скан рукописи на русском и превращает её
+          в текст, который можно скопировать или сохранить.
+        </p>
+      </header>
+
+      <main class="layout">
+        <section class="panel drop-panel" aria-labelledby="upload-title">
+          <h2 id="upload-title">Изображение</h2>
+          <label class="dropzone" id="dropzone" for="file-input">
+            <input
+              id="file-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff"
+              hidden
+            />
+            <span class="dropzone-icon" aria-hidden="true">✎</span>
+            <span class="dropzone-title">Перетащите фото сюда</span>
+            <span class="dropzone-hint">JPG, PNG, WEBP, BMP, TIFF · до 10 МБ</span>
+            <span class="dropzone-button">Выбрать файл</span>
+          </label>
+          <div class="preview-wrap" id="preview-wrap" hidden>
+            <img id="preview" alt="Загруженное изображение" />
+            <p class="filename" id="filename"></p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="enhance" checked />
+            Улучшить контраст перед распознаванием
+          </label>
+          <button type="button" class="primary" id="recognize" disabled>
+            Распознать
+          </button>
+          <p class="status" id="status" role="status"></p>
+        </section>
+
+        <section class="panel result-panel" aria-labelledby="result-title">
+          <div class="result-head">
+            <h2 id="result-title">Текст</h2>
+            <div class="actions">
+              <button type="button" class="ghost" id="copy" disabled>Копировать</button>
+              <button type="button" class="ghost" id="download" disabled>Скачать .txt</button>
+            </div>
+          </div>
+          <textarea
+            id="result"
+            readonly
+            placeholder="Здесь появится распознанный текст."
+          ></textarea>
+          <p class="meta" id="meta"></p>
+        </section>
+      </main>
+
+      <footer>
+        <p>
+          Первый запуск может занять время: загружаются модели распознавания.
+          Лучше всего работают ровные фото при хорошем свете, без сильных теней.
+        </p>
+      </footer>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
