@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass, field
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -19,21 +20,26 @@ DEFAULT_CONFIG = "--oem 1 --psm 6"
 @dataclass
 class Word:
     text: str
-    confidence: float
+    confidence: Optional[float] = None
 
 
 @dataclass
 class RecognitionResult:
     text: str
-    confidence: float
+    confidence: Optional[float] = None
     words: list[Word] = field(default_factory=list)
+    engine: str = "tesseract"
 
     def to_dict(self) -> dict:
         return {
             "text": self.text,
-            "confidence": round(self.confidence, 2),
+            "engine": self.engine,
+            "confidence": round(self.confidence, 2) if self.confidence is not None else None,
             "words": [
-                {"text": w.text, "confidence": round(w.confidence, 2)}
+                {
+                    "text": w.text,
+                    "confidence": round(w.confidence, 2) if w.confidence is not None else None,
+                }
                 for w in self.words
             ],
         }

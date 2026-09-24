@@ -72,6 +72,17 @@
       font-size: 1.05rem;
       line-height: 1.5;
     }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 1rem; font-size: 0.9rem; }
+    .controls label { color: var(--muted); }
+    .controls select {
+      background: #0b1220; color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.4rem 0.6rem; font-size: 0.9rem;
+    }
+    .controls .check { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+    .hint { color: var(--muted); font-size: 0.8rem; margin: 0.5rem 0 0; }
+    .result-block + .result-block { margin-top: 1rem; }
+    .result-title { font-size: 0.8rem; color: var(--accent-hover); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.35rem; }
     .meta { display: flex; gap: 1rem; margin-top: 0.75rem; color: var(--muted); font-size: 0.9rem; }
     .badge {
       display: inline-block;
@@ -106,12 +117,28 @@
           <input type="file" id="fileInput" accept="image/*" hidden />
           <img id="preview" alt="Предпросмотр" />
         </div>
+        <div class="controls">
+          <label for="engine">Движок</label>
+          <select id="engine">
+            <option value="trocr">Рукописный (TrOCR, нейросеть)</option>
+            <option value="tesseract">Печатный (Tesseract, быстро)</option>
+          </select>
+          <label class="check"><input type="checkbox" id="spellcheck" /> Проверка орфографии (экспериментально)</label>
+        </div>
+        <p class="hint" id="engineHint">Рукописный движок точнее для курсива, но медленнее; при первом запуске скачивается модель (~1.3 ГБ). Проверка орфографии консервативная и без учёта контекста — иногда может исказить верные слова.</p>
         <button id="recognizeBtn" disabled>Распознать</button>
         <div class="spinner" id="spinner"></div>
         <div class="error" id="error"></div>
       </div>
       <div class="panel">
-        <div class="result-text" id="resultText">Здесь появится распознанный текст…</div>
+        <div class="result-block">
+          <div class="result-title">Распознанный текст</div>
+          <div class="result-text" id="resultText">Здесь появится распознанный текст…</div>
+        </div>
+        <div class="result-block" id="correctedBlock" style="display:none">
+          <div class="result-title">После проверки орфографии</div>
+          <div class="result-text" id="correctedText"></div>
+        </div>
         <div class="meta" id="meta"></div>
       </div>
     </div>
@@ -124,8 +151,12 @@
     const recognizeBtn = document.getElementById("recognizeBtn");
     const spinner = document.getElementById("spinner");
     const resultText = document.getElementById("resultText");
+    const correctedBlock = document.getElementById("correctedBlock");
+    const correctedText = document.getElementById("correctedText");
     const meta = document.getElementById("meta");
     const errorBox = document.getElementById("error");
+    const engineSelect = document.getElementById("engine");
+    const spellcheckBox = document.getElementById("spellcheck");
 
     let selectedFile = null;
 
@@ -166,23 +197,35 @@
       if (!selectedFile) return;
       errorBox.textContent = "";
       resultText.textContent = "";
+      correctedBlock.style.display = "none";
+      correctedText.textContent = "";
       meta.innerHTML = "";
       spinner.style.display = "block";
       recognizeBtn.disabled = true;
 
+      const engine = engineSelect.value;
+      const spellcheck = spellcheckBox.checked;
+      const params = new URLSearchParams({ engine, spellcheck });
       const formData = new FormData();
       formData.append("file", selectedFile);
 
       try {
-        const resp = await fetch("/api/recognize", { method: "POST", body: formData });
+        const resp = await fetch(`/api/recognize?${params}`, { method: "POST", body: formData });
         if (!resp.ok) {
           const detail = await resp.json().catch(() => ({}));
           throw new Error(detail.detail || `Ошибка сервера (${resp.status})`);
         }
         const data = await resp.json();
         resultText.textContent = data.text || "(текст не распознан)";
+        if (data.text_corrected) {
+          correctedText.textContent = data.text_corrected;
+          correctedBlock.style.display = "block";
+        }
+        const confidence =
+          data.confidence != null ? `${data.confidence}%` : "—";
         meta.innerHTML =
-          `<span>Средняя уверенность: <span class="badge">${data.confidence}%</span></span>` +
+          `<span>Движок: <span class="badge">${data.engine}</span></span>` +
+          `<span>Уверенность: <span class="badge">${confidence}</span></span>` +
           `<span>Слов: <span class="badge">${data.words.length}</span></span>`;
       } catch (err) {
         errorBox.textContent = err.message;
