@@ -2,15 +2,25 @@
 
 Приложение для перевода русского рукописного/печатного текста в электронный формат.
 
-Распознавание построено на **Tesseract OCR** (движок LSTM) с русской языковой моделью —
-без `torch`/CUDA, поэтому установка лёгкая и работает офлайн.
+Два движка распознавания:
+
+- **Tesseract OCR** — быстрый, лёгкий (без `torch`), хорош для **печатного/аккуратного** текста.
+  Для курсивного рукописного текста практически бесполезен.
+- **TrOCR (рукописный)** — нейросетевая модель `kazars24/trocr-base-handwritten-ru`,
+  дообученная на русском рукописном тексте. Распознаёт **курсив**. Тяжелее и медленнее,
+  требует CPU-`torch` + `transformers`; модель (~1.3 ГБ) скачивается при первом запуске.
+
+Ключевая деталь TrOCR: модель ужимает вход до 384×384, поэтому подавать строку целиком
+нельзя — текст разрушается. Пайплайн сегментирует страницу на **строки**, затем на **слова**
+(OpenCV: коррекция освещения, бинаризация, проекционные профили) и распознаёт по словам.
 
 ## Стек
 
 - **FastAPI** — REST API и веб-интерфейс
-- **Tesseract OCR** (`tesseract-ocr`, `tesseract-ocr-rus`) — распознавание
-- **pytesseract** — Python-обёртка над Tesseract
-- **OpenCV / Pillow / NumPy** — предобработка изображений (масштабирование, бинаризация Otsu)
+- **Tesseract OCR** (`tesseract-ocr`, `tesseract-ocr-rus`) + **pytesseract** — печатный текст
+- **TrOCR** (`transformers`, CPU-`torch`) — рукописный текст
+- **OpenCV / Pillow / NumPy / SciPy** — предобработка и сегментация
+- **pyspellchecker** — опциональная (экспериментальная) проверка орфографии
 
 ## Установка
 
@@ -23,6 +33,18 @@ bash scripts/install.sh
 
 > Если вы за корпоративным прокси с перехватом SSL, добавьте к pip-командам
 > `--trusted-host pypi.org --trusted-host files.pythonhosted.org`.
+
+### Рукописный движок (TrOCR) — опционально
+
+Тяжёлые зависимости ставятся отдельно (CPU-`torch`, без CUDA):
+
+```bash
+.venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+.venv/bin/pip install -r requirements-trocr.txt
+```
+
+Модель `kazars24/trocr-base-handwritten-ru` (~1.3 ГБ) скачается автоматически при
+первом распознавании. На CPU одна страница обрабатывается ~2–3 минуты.
 
 ## Запуск
 
@@ -40,12 +62,32 @@ bash scripts/install.sh
 | GET   | `/api/health`     | Статус + версия Tesseract и список языков           |
 | POST  | `/api/recognize`  | `multipart/form-data` с полем `file` → JSON с текстом |
 
-Пример:
+Параметры `/api/recognize` (query):
+
+- `engine` — `tesseract` (по умолчанию) или `trocr` (рукописный).
+- `spellcheck` — `true`/`false`: вернуть дополнительно поле `text_corrected`
+  (консервативная словарная проверка, без учёта контекста — по умолчанию выключена).
+
+Примеры:
 
 ```bash
+# печатный текст (Tesseract)
 python scripts/make_sample.py --text "Привет, мир!" --out sample.png
-curl -s -F "file=@sample.png" http://localhost:8000/api/recognize
+curl -s -F "file=@sample.png" "http://localhost:8000/api/recognize?engine=tesseract"
+
+# рукописный текст (TrOCR) + проверка орфографии
+curl -s -F "file=@page.jpg" "http://localhost:8000/api/recognize?engine=trocr&spellcheck=true"
 ```
+
+## Ограничения и планы
+
+- **Печатный Tesseract** не читает курсив — для рукописи используйте `engine=trocr`.
+- **TrOCR** даёт ~75–85% верных слов на аккуратном курсиве; качество падает при плохой
+  сегментации (слитные строки, наклон, шум) и на нижних плотных абзацах.
+- **Проверка орфографии** словарная и без контекста: иногда искажает верные слова
+  (например «лесом» → «летом»), поэтому выключена по умолчанию. Полноценная проверка
+  орфографии/грамматики/смысла требует контекстной модели (LLM или seq2seq-корректор
+  типа SAGE) — это возможный следующий шаг.
 
 ## Тесты
 
