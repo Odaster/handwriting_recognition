@@ -55,3 +55,5 @@ curl -s -F "file=@sample.png" http://localhost:8000/api/recognize
 
 Тесты генерируют изображения с русским текстом и проверяют, что Tesseract
 корректно распознаёт их через OCR-модуль и через HTTP-эндпоинт.
+<img width="1851" height="882" alt="image" src="https://github.com/user-attachments/assets/cb27370e-0344-4f35-b07c-cd49865fcdae" />
+
