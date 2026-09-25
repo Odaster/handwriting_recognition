@@ -50,3 +50,87 @@
 ## Новые сообщения
 
 <!-- Пишите ниже. Новые сообщения удобно добавлять сверху этого раздела. -->
+vmuser@vmuser-VMware-Virtual-Platform:~/handwriting_recognition$ .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+INFO:     Started server process [8076]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:56366 - "GET / HTTP/1.1" 200 OK
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 480/480 [00:00<00:00, 1510.28it/s]
+[transformers] Both `max_new_tokens` (=32) and `max_length`(=64) seem to have been set. `max_new_tokens` will take precedence. Please refer to the documentation for more information. (https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)
+[transformers] Both `max_new_tokens` (=32) and `max_length`(=64) seem to have been set. `max_new_tokens` will take precedence. Please refer to the documentation for more information. (https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)
+[transformers] Both `max_new_tokens` (=32) and `max_length`(=64) seem to have been set. `max_new_tokens` will take precedence. Please refer to the documentation for more information. (https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)
+[transformers] Both `max_new_tokens` (=32) and `max_length`(=64) seem to have been set. `max_new_tokens` will take precedence. Please refer to the documentation for more information. (https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)
+[transformers] Both `max_new_tokens` (=32) and `max_length`(=64) seem to have been set. `max_new_tokens` will take precedence. Please refer to the documentation for more information. (https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)
+[transformers] Both `max_new_tokens` (=32) and `max_length`(=64) seem to have been set. `max_new_tokens` will take precedence. Please refer to the documentation for more information. (https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)
+[transformers] Both `max_new_tokens` (=32) and `max_length`(=64) seem to have been set. `max_new_tokens` will take precedence. Please refer to the documentation for more information. (https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)
+[transformers] Both `max_new_tokens` (=32) and `max_length`(=64) seem to have been set. `max_new_tokens` will take precedence. Please refer to the documentation for more information. (https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)
+[transformers] Both `max_new_tokens` (=32) and `max_length`(=64) seem to have been set. `max_new_tokens` will take precedence. Please refer to the documentation for more information. (https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)
+[transformers] Both `max_new_tokens` (=32) and `max_length`(=64) seem to have been set. `max_new_tokens` will take precedence. Please refer to the documentation for more information. (https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)
+config.json: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 789/789 [00:00<00:00, 628kB/s]
+tokenizer_config.json: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 20.3k/20.3k [00:00<00:00, 14.5MB/s]
+vocab.json: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1.81M/1.81M [00:00<00:00, 6.45MB/s]
+merges.txt: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1.27M/1.27M [00:00<00:00, 5.60MB/s]
+added_tokens.json: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 2.72k/2.72k [00:00<00:00, 5.21MB/s]
+special_tokens_map.json: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 689/689 [00:00<00:00, 1.94MB/s]
+model.safetensors: downloading bytes: ██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████|  171MB, 2.04MB/s  
+model.safetensors: reconstructing file: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████|  383MB /  383MB, 14.4MB/s  
+Loading weights: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 190/190 [00:00<00:00, 1962.20it/s]
+[transformers] The tied weights mapping and config for this model specifies to tie shared.weight to lm_head.weight, but both are present in the checkpoints with different values, so we will NOT tie them. You should update the config with `tie_word_embeddings=False` to silence this warning.
+generation_config.json: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 184/184 [00:00<00:00, 814kB/s]
+[transformers] Ignoring clean_up_tokenization_spaces=True for BPE tokenizer GPT2Tokenizer. The clean_up_tokenization post-processing step is designed for WordPiece tokenizers and is destructive for BPE (it strips spaces before punctuation). Set clean_up_tokenization_spaces=False to suppress this warning, or set clean_up_tokenization_spaces_for_bpe_even_though_it_will_corrupt_output=True to force cleanup anyway.
+INFO:     127.0.0.1:38580 - "POST /api/recognize?engine=trocr&corrector=context HTTP/1.1" 200 OK
+
+Распознанный текст
+Ноль в легу
+Деревня была где-то за лесом. исли изти в ней по
+большой дороге , нупинь отмахать не один десяток х
+километров, если пойти лесними тропинками путь
+урежется врвое. Полстие корни обхватили извилистуль тропу.
+лес ищлит, устнаивает. В стымом воздухе кружатся О
+жухлие листья Тропинка, петли среди деревьев, поднимости
+на пригорхи, слускается в логибинки забирали в лагуобу
+осинника внбегает на зарастающий ельником полены, и
+кажется, что она так и не выведет тебл никуда.
+Но вот вместе с листьми начинает кругипться
+снежинки Их становита больше л. б 1 8 п
+хогроводе не видно уше ничего: н. больше, и в снежном
+Осенный день нах свена тмет- падыющих листьев ни трожи.
+учаснет. На лес наваливных см-тит туекши огнём и
+визно: не знаемь, куда иджи. Сумерни, и дороги совим не
+Ищтко и странию в темнож о л. п
+дольми рискованю: осенью севе Марина совсем одна Идти
+Марина забирается на дерево и ремса страши вынами.
+ночь в лесу. о 1 пр переждать злегныю
+Монрый снег напоми в ч
+обмороженные ноги. Наюска пальто. Нолодно, и ныт
+неоглиданно э п х о ед в промогла ел
+сли зманими ащитрай
+
+После коррекции
+Ноль в лигу.
+Деревня была где-то за лесом. Если идти в ней по...
+Большой дороге, нупинь отмахать не один десяток х.
+километров, если пойти лесными тропинками - путь.
+Урежется втрое. Полстые корни обхватили извилистую тропу.
+Лес ищет, устраивает. В стомом воздухе кружатся О.
+Жухлые листья Тропинка, петли среди деревьев, поднимаемости.
+На пригорхи, случается, в логибинки забирали в лагуобу.
+Особинника набегает на зарастающий ельником полены и...
+Кажется, что она так и не выведет тебя никуда.
+Но вот вместе с листьями начинает крупиться.
+Снежинки. Их становится больше: л. б. 1,8 п.
+Хогровода не видно уже ничего: н. больше и в снежном.
+Осенний день на свёнах тёт, падыющих листьев ни трожжи.
+Участник. На лес наваливных см-тит туекши огнём и...
+Визано: не знаем, куда идти. Сумерни и дороги совсем не.
+Ищетко и странию в темнож, о л. п.
+Дольми рискованю: осенью Севе Марина совсем одна Идти.
+Марина забирается на дерево, и ремса страши вынами.
+Ночь в лесу. О 1 пр. Переждать злегную.
+Мёрзный снег, напоми в ч.
+Обмороженные ноги. Наюска пальто. Нолодно и нут.
+Неожиданно ЭП Х о ЕД в промогла ЕЛ.
+Если зманими защитрай.
+Движок: trocr Уверенность: — Слов: 147
