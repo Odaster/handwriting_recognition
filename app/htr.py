@@ -24,8 +24,8 @@ from PIL import Image
 
 from app.ocr import RecognitionResult, Word
 
-# Quiet Hugging Face startup noise (progress bars, advisory token warning).
-os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+# Quiet Hugging Face advisory noise, but KEEP download progress bars so the
+# multi-GB model downloads on first run are visible in the terminal.
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 
@@ -50,12 +50,6 @@ def _load_model():
         raise RuntimeError(_MISSING_DEPS_MSG) from exc
 
     hf_logging.set_verbosity_error()  # silence advisory warnings during generate()
-    try:
-        from huggingface_hub.utils import logging as hub_logging
-
-        hub_logging.set_verbosity_error()
-    except Exception:  # noqa: BLE001 - best-effort log quieting
-        pass
 
     processor = TrOCRProcessor.from_pretrained(MODEL_NAME)
     model = VisionEncoderDecoderModel.from_pretrained(MODEL_NAME).eval()
