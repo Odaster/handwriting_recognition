@@ -1,14 +1,14 @@
 """Context-aware Russian text correction using a SAGE seq2seq model.
 
 Unlike the dictionary corrector in :mod:`app.postprocess`, this model
-(``ai-forever/sage-fredt5-distilled-95m``) understands context, so it fixes
-OCR/spelling errors that a per-word dictionary cannot — e.g. "исли изти" ->
-"Если идти" — while leaving valid words and short prepositions intact. It also
-restores capitalization and punctuation.
+understands context, so it fixes OCR/spelling errors that a per-word dictionary
+cannot — e.g. "исли изти" -> "Если идти" — while leaving valid words and short
+prepositions intact. It also restores capitalization and punctuation.
 
-Correction runs line-by-line (matching the recognizer's output structure) and
-is fast on CPU (~0.1-0.2 s per line) because the distilled model is only ~95M
-parameters. The model (~350 MB) downloads on first use.
+The default ``ai-forever/sage-fredt5-large`` (~820M params, ~3.3 GB) favors
+quality; set ``SAGE_MODEL=ai-forever/sage-fredt5-distilled-95m`` for a much
+smaller/faster model. Correction runs line-by-line (matching the recognizer's
+output structure). The model downloads on first use.
 
 Heavy dependencies (torch, transformers, sentencepiece) are optional and only
 imported here. Install them with ``requirements-trocr.txt``.
@@ -24,7 +24,9 @@ os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 
-MODEL_NAME = "ai-forever/sage-fredt5-distilled-95m"
+# Large model favors quality; override with SAGE_MODEL for a faster/smaller one
+# (e.g. ai-forever/sage-fredt5-distilled-95m).
+MODEL_NAME = os.environ.get("SAGE_MODEL", "ai-forever/sage-fredt5-large")
 _MISSING_DEPS_MSG = (
     "Контекстный корректор требует дополнительных зависимостей "
     "(torch, transformers, sentencepiece). Установите их: "

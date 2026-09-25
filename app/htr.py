@@ -29,7 +29,10 @@ os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 
-MODEL_NAME = "kazars24/trocr-base-handwritten-ru"
+MODEL_NAME = os.environ.get("HTR_MODEL", "kazars24/trocr-base-handwritten-ru")
+# Beam search improves quality over greedy decoding. 4 favors quality; set
+# HTR_BEAMS=1 for ~4x faster (greedy) recognition with slightly lower quality.
+NUM_BEAMS = int(os.environ.get("HTR_BEAMS", "4"))
 _MISSING_DEPS_MSG = (
     "Рукописный движок требует дополнительных зависимостей "
     "(torch, transformers, scipy). Установите их: "
@@ -182,7 +185,7 @@ def segment_words(line_thr: np.ndarray, min_gap: int | None = None, min_width: i
     return [(a, b) for a, b in merged if b - a >= min_width]
 
 
-def recognize_image(image: Image.Image, batch_size: int = 16) -> RecognitionResult:
+def recognize_image(image: Image.Image, batch_size: int = 16, num_beams: int = NUM_BEAMS) -> RecognitionResult:
     """Recognize handwritten Russian text on a full page image."""
     import torch
 
@@ -208,7 +211,7 @@ def recognize_image(image: Image.Image, batch_size: int = 16) -> RecognitionResu
     for i in range(0, len(crops), batch_size):
         pixel_values = processor(images=crops[i:i + batch_size], return_tensors="pt").pixel_values
         with torch.no_grad():
-            generated = model.generate(pixel_values, max_new_tokens=48, num_beams=1)
+            generated = model.generate(pixel_values, max_new_tokens=48, num_beams=num_beams)
         words.extend(
             processor.batch_decode(
                 generated, skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -228,6 +231,6 @@ def recognize_image(image: Image.Image, batch_size: int = 16) -> RecognitionResu
     return RecognitionResult(text=full_text, confidence=None, words=word_objs, engine="trocr")
 
 
-def recognize_bytes(data: bytes, batch_size: int = 16) -> RecognitionResult:
+def recognize_bytes(data: bytes, batch_size: int = 16, num_beams: int = NUM_BEAMS) -> RecognitionResult:
     image = Image.open(io.BytesIO(data))
-    return recognize_image(image, batch_size=batch_size)
+    return recognize_image(image, batch_size=batch_size, num_beams=num_beams)
