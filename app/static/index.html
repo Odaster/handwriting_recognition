@@ -123,9 +123,14 @@
             <option value="trocr">Рукописный (TrOCR, нейросеть)</option>
             <option value="tesseract">Печатный (Tesseract, быстро)</option>
           </select>
-          <label class="check"><input type="checkbox" id="spellcheck" /> Проверка орфографии (экспериментально)</label>
+          <label for="corrector">Коррекция</label>
+          <select id="corrector">
+            <option value="context">Контекстная (SAGE)</option>
+            <option value="none">Нет</option>
+            <option value="spell">Словарная</option>
+          </select>
         </div>
-        <p class="hint" id="engineHint">Рукописный движок точнее для курсива, но медленнее; при первом запуске скачивается модель (~1.3 ГБ). Проверка орфографии консервативная и без учёта контекста — иногда может исказить верные слова.</p>
+        <p class="hint" id="engineHint">Рукописный движок точнее для курсива, но медленнее; при первом запуске скачивается модель (~1.3 ГБ). Контекстная коррекция (SAGE) исправляет орфографию/грамматику с учётом контекста; словарная — консервативная, без контекста.</p>
         <button id="recognizeBtn" disabled>Распознать</button>
         <div class="spinner" id="spinner"></div>
         <div class="error" id="error"></div>
@@ -136,7 +141,7 @@
           <div class="result-text" id="resultText">Здесь появится распознанный текст…</div>
         </div>
         <div class="result-block" id="correctedBlock" style="display:none">
-          <div class="result-title">После проверки орфографии</div>
+          <div class="result-title">После коррекции</div>
           <div class="result-text" id="correctedText"></div>
         </div>
         <div class="meta" id="meta"></div>
@@ -156,7 +161,7 @@
     const meta = document.getElementById("meta");
     const errorBox = document.getElementById("error");
     const engineSelect = document.getElementById("engine");
-    const spellcheckBox = document.getElementById("spellcheck");
+    const correctorSelect = document.getElementById("corrector");
 
     let selectedFile = null;
 
@@ -204,8 +209,8 @@
       recognizeBtn.disabled = true;
 
       const engine = engineSelect.value;
-      const spellcheck = spellcheckBox.checked;
-      const params = new URLSearchParams({ engine, spellcheck });
+      const corrector = correctorSelect.value;
+      const params = new URLSearchParams({ engine, corrector });
       const formData = new FormData();
       formData.append("file", selectedFile);
 
