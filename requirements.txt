@@ -1,0 +1,10 @@
+# Runtime dependencies (Tesseract-based OCR, path B — no torch/CUDA)
+fastapi>=0.115.0,<1
+uvicorn[standard]>=0.32.0,<1
+python-multipart>=0.0.12
+pillow>=10.4.0
+numpy>=1.26.0
+opencv-python-headless>=4.10.0
+pytesseract>=0.3.13
+# Dictionary-based Russian spell correction (lightweight, used by post-processing).
+pyspellchecker>=0.8

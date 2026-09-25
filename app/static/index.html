@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Распознавание русского текста</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .container { width: 100%; max-width: 900px; }
+    h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+    .subtitle { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.95rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem;
+    }
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 2rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .dropzone.dragover { border-color: var(--accent); background: rgba(99,102,241,0.08); }
+    .dropzone p { margin: 0.4rem 0; color: var(--muted); }
+    #preview { max-width: 100%; max-height: 260px; margin-top: 1rem; border-radius: 10px; display: none; }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 0.7rem 1.2rem;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 1rem;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .result-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0b1220;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      min-height: 160px;
+      font-size: 1.05rem;
+      line-height: 1.5;
+    }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 1rem; font-size: 0.9rem; }
+    .controls label { color: var(--muted); }
+    .controls select {
+      background: #0b1220; color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.4rem 0.6rem; font-size: 0.9rem;
+    }
+    .controls .check { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+    .hint { color: var(--muted); font-size: 0.8rem; margin: 0.5rem 0 0; }
+    .result-block + .result-block { margin-top: 1rem; }
+    .result-title { font-size: 0.8rem; color: var(--accent-hover); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.35rem; }
+    .meta { display: flex; gap: 1rem; margin-top: 0.75rem; color: var(--muted); font-size: 0.9rem; }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(99,102,241,0.15);
+      color: var(--accent-hover);
+      font-weight: 600;
+    }
+    .spinner {
+      display: none;
+      width: 22px; height: 22px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 1rem auto 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error { color: #f87171; margin-top: 0.75rem; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Распознавание русского текста</h1>
+    <p class="subtitle">Загрузите изображение с рукописным или печатным русским текстом — движок Tesseract вернёт распознанный текст.</p>
+    <div class="grid">
+      <div class="panel">
+        <div class="dropzone" id="dropzone">
+          <p><strong>Перетащите изображение сюда</strong></p>
+          <p>или нажмите, чтобы выбрать файл</p>
+          <input type="file" id="fileInput" accept="image/*" hidden />
+          <img id="preview" alt="Предпросмотр" />
+        </div>
+        <div class="controls">
+          <label for="engine">Движок</label>
+          <select id="engine">
+            <option value="trocr">Рукописный (TrOCR, нейросеть)</option>
+            <option value="tesseract">Печатный (Tesseract, быстро)</option>
+          </select>
+          <label for="corrector">Коррекция</label>
+          <select id="corrector">
+            <option value="context">Контекстная (SAGE)</option>
+            <option value="none">Нет</option>
+            <option value="spell">Словарная</option>
+          </select>
+        </div>
+        <p class="hint" id="engineHint">Рукописный движок точнее для курсива, но медленнее; при первом запуске скачивается модель (~1.3 ГБ). Контекстная коррекция (SAGE) исправляет орфографию/грамматику с учётом контекста; словарная — консервативная, без контекста.</p>
+        <button id="recognizeBtn" disabled>Распознать</button>
+        <div class="spinner" id="spinner"></div>
+        <div class="error" id="error"></div>
+      </div>
+      <div class="panel">
+        <div class="result-block">
+          <div class="result-title">Распознанный текст</div>
+          <div class="result-text" id="resultText">Здесь появится распознанный текст…</div>
+        </div>
+        <div class="result-block" id="correctedBlock" style="display:none">
+          <div class="result-title">После коррекции</div>
+          <div class="result-text" id="correctedText"></div>
+        </div>
+        <div class="meta" id="meta"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const preview = document.getElementById("preview");
+    const recognizeBtn = document.getElementById("recognizeBtn");
+    const spinner = document.getElementById("spinner");
+    const resultText = document.getElementById("resultText");
+    const correctedBlock = document.getElementById("correctedBlock");
+    const correctedText = document.getElementById("correctedText");
+    const meta = document.getElementById("meta");
+    const errorBox = document.getElementById("error");
+    const engineSelect = document.getElementById("engine");
+    const correctorSelect = document.getElementById("corrector");
+
+    let selectedFile = null;
+
+    function setFile(file) {
+      if (!file || !file.type.startsWith("image/")) {
+        errorBox.textContent = "Пожалуйста, выберите файл изображения.";
+        return;
+      }
+      errorBox.textContent = "";
+      selectedFile = file;
+      recognizeBtn.disabled = false;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        preview.src = e.target.result;
+        preview.style.display = "block";
+      };
+      reader.readAsDataURL(file);
+    }
+
+    dropzone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => setFile(e.target.files[0]));
+
+    ["dragenter", "dragover"].forEach((evt) =>
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.add("dragover");
+      })
+    );
+    ["dragleave", "drop"].forEach((evt) =>
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove("dragover");
+      })
+    );
+    dropzone.addEventListener("drop", (e) => setFile(e.dataTransfer.files[0]));
+
+    recognizeBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+      errorBox.textContent = "";
+      resultText.textContent = "";
+      correctedBlock.style.display = "none";
+      correctedText.textContent = "";
+      meta.innerHTML = "";
+      spinner.style.display = "block";
+      recognizeBtn.disabled = true;
+
+      const engine = engineSelect.value;
+      const corrector = correctorSelect.value;
+      const params = new URLSearchParams({ engine, corrector });
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      try {
+        const resp = await fetch(`/api/recognize?${params}`, { method: "POST", body: formData });
+        if (!resp.ok) {
+          const detail = await resp.json().catch(() => ({}));
+          throw new Error(detail.detail || `Ошибка сервера (${resp.status})`);
+        }
+        const data = await resp.json();
+        resultText.textContent = data.text || "(текст не распознан)";
+        if (data.text_corrected) {
+          correctedText.textContent = data.text_corrected;
+          correctedBlock.style.display = "block";
+        }
+        const confidence =
+          data.confidence != null ? `${data.confidence}%` : "—";
+        meta.innerHTML =
+          `<span>Движок: <span class="badge">${data.engine}</span></span>` +
+          `<span>Уверенность: <span class="badge">${confidence}</span></span>` +
+          `<span>Слов: <span class="badge">${data.words.length}</span></span>`;
+      } catch (err) {
+        errorBox.textContent = err.message;
+      } finally {
+        spinner.style.display = "none";
+        recognizeBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

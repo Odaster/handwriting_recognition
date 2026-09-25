@@ -1,0 +1,12 @@
+# Optional heavy dependencies for the neural handwriting engine (TrOCR).
+# CPU-only torch (no CUDA) — install with the PyTorch CPU index:
+#
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+#   pip install -r requirements-trocr.txt
+#
+# The model kazars24/trocr-base-handwritten-ru (~1.3 GB) downloads on first use.
+transformers>=4.44
+scipy>=1.11
+# Tokenizer backends for the SAGE context corrector (sage-fredt5).
+sentencepiece>=0.2
+protobuf>=4.0
