@@ -98,11 +98,51 @@ def segment_lines(thr: np.ndarray) -> list[tuple[int, int]]:
         cuts.append(a + int(np.argmin(smoothed[a:b])))
     cuts.append(height)
 
-    return [
+    bands = [
         (cuts[i], cuts[i + 1])
         for i in range(len(cuts) - 1)
         if cuts[i + 1] - cuts[i] >= 20
     ]
+    if not bands:
+        return [(0, height)]
+
+    # Dense paragraphs (often at the bottom) merge several lines into one tall
+    # band. Split any band much taller than the median into individual lines,
+    # preferring internal peaks and falling back to an even split by line pitch.
+    band_heights = sorted(b[1] - b[0] for b in bands)
+    median_h = band_heights[len(band_heights) // 2]
+    refined: list[tuple[int, int]] = []
+    for y0, y1 in bands:
+        h = y1 - y0
+        # Only tall bands can hold several merged lines; normal lines pass through.
+        if median_h <= 0 or h <= 1.5 * median_h:
+            refined.append((y0, y1))
+            continue
+
+        # Re-detect lines inside the tall band with a lower prominence.
+        seg = smoothed[y0:y1]
+        sub_peaks, _ = find_peaks(seg, distance=30, prominence=max(seg.max() * 0.03, 1.0))
+        if len(sub_peaks) <= 1:
+            # A single ink peak means one line surrounded by whitespace (e.g. the
+            # title) — keep it whole rather than splitting through the glyphs.
+            refined.append((y0, y1))
+            continue
+
+        centers = [int(p) for p in sub_peaks]
+        sub_cuts = [0]
+        for i in range(len(centers) - 1):
+            a, b = centers[i], centers[i + 1]
+            sub_cuts.append(a + int(np.argmin(seg[a:b])))
+        sub_cuts.append(h)
+        for i in range(len(sub_cuts) - 1):
+            if sub_cuts[i + 1] - sub_cuts[i] >= 20:
+                refined.append((y0 + sub_cuts[i], y0 + sub_cuts[i + 1]))
+
+    # Drop near-empty bands (blank top/bottom margins) so we don't run the model
+    # on whitespace.
+    ink_threshold = smoothed.max() * 0.15
+    result = [(y0, y1) for y0, y1 in refined if smoothed[y0:y1].max() > ink_threshold]
+    return result or [(0, height)]
 
 
 def segment_words(line_thr: np.ndarray, min_gap: int | None = None, min_width: int | None = None) -> list[tuple[int, int]]:
