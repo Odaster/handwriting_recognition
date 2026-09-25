@@ -15,6 +15,7 @@ imported here, so the rest of the app runs without them. Install them with:
 from __future__ import annotations
 
 import io
+import os
 from functools import lru_cache
 
 import cv2
@@ -22,6 +23,11 @@ import numpy as np
 from PIL import Image
 
 from app.ocr import RecognitionResult, Word
+
+# Quiet Hugging Face startup noise (progress bars, advisory token warning).
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 
 MODEL_NAME = "kazars24/trocr-base-handwritten-ru"
 _MISSING_DEPS_MSG = (
@@ -36,11 +42,23 @@ def _load_model():
     try:
         import torch  # noqa: F401
         from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+        from transformers.utils import logging as hf_logging
     except ImportError as exc:
         raise RuntimeError(_MISSING_DEPS_MSG) from exc
 
+    hf_logging.set_verbosity_error()  # silence advisory warnings during generate()
+    try:
+        from huggingface_hub.utils import logging as hub_logging
+
+        hub_logging.set_verbosity_error()
+    except Exception:  # noqa: BLE001 - best-effort log quieting
+        pass
+
     processor = TrOCRProcessor.from_pretrained(MODEL_NAME)
     model = VisionEncoderDecoderModel.from_pretrained(MODEL_NAME).eval()
+    # Drive length purely via max_new_tokens; clearing max_length avoids the
+    # "both max_new_tokens and max_length are set" warning on every batch.
+    model.generation_config.max_length = None
     return processor, model
 
 
@@ -150,8 +168,12 @@ def recognize_image(image: Image.Image, batch_size: int = 16) -> RecognitionResu
     for i in range(0, len(crops), batch_size):
         pixel_values = processor(images=crops[i:i + batch_size], return_tensors="pt").pixel_values
         with torch.no_grad():
-            generated = model.generate(pixel_values, max_new_tokens=32, num_beams=1)
-        words.extend(processor.batch_decode(generated, skip_special_tokens=True))
+            generated = model.generate(pixel_values, max_new_tokens=48, num_beams=1)
+        words.extend(
+            processor.batch_decode(
+                generated, skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )
+        )
 
     lines_out: list[list[str]] = [[] for _ in bands]
     word_objs: list[Word] = []
