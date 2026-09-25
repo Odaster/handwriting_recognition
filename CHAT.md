@@ -47,6 +47,69 @@
 
 ---
 
+## Установка полной версии (рукописный движок TrOCR + корректор SAGE)
+
+Ubuntu 24.04, всё выполняем в папке репозитория `~/handwriting_recognition`.
+
+```bash
+# 0) Обновить код из ветки
+cd ~/handwriting_recognition
+git pull origin cursor/linux-install-debug-dd79
+
+# 1) Базовая установка (Tesseract + venv + лёгкие зависимости). Идемпотентно.
+bash scripts/install.sh
+
+# 2) Тяжёлые зависимости для рукописного движка (CPU-torch, без CUDA)
+.venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+.venv/bin/pip install -r requirements-trocr.txt
+
+# 3) Запуск
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Откройте `http://localhost:8000`. В UI: **Движок = «Рукописный (TrOCR)»**,
+**Коррекция = «Контекстная (SAGE)»**. Загрузите фото рукописи → «Распознать».
+
+### Что скачается при первом запуске (с HuggingFace, по HTTPS)
+
+- TrOCR `kazars24/trocr-base-handwritten-ru` — ~1.3 ГБ
+- Корректор `ai-forever/sage-fredt5-large` — ~3.3 ГБ
+- CPU-`torch` — ~190 МБ
+
+### Скорость vs качество (env-переменные)
+
+По умолчанию — максимум качества (beam search + большой корректор), одна страница
+на CPU считается единицы–десятки минут. Чтобы ускорить:
+
+```bash
+HTR_BEAMS=1 \
+SAGE_MODEL=ai-forever/sage-fredt5-distilled-95m \
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+(`sage-fredt5-distilled-95m` — всего ~350 МБ вместо 3.3 ГБ.)
+
+### Если корпоративный прокси с перехватом SSL
+
+- Для pip: добавляйте `--trusted-host pypi.org --trusted-host files.pythonhosted.org
+  --trusted-host download.pytorch.org`.
+- Для загрузки моделей (HuggingFace тоже по HTTPS): укажите ваш корпоративный CA:
+  ```bash
+  export REQUESTS_CA_BUNDLE=/путь/к/corp-ca.crt
+  export SSL_CERT_FILE=/путь/к/corp-ca.crt
+  ```
+  CA-сертификат можно попросить у админа. Без него загрузка моделей упрётся в тот же
+  `self-signed certificate in certificate chain`.
+
+### Быстрая проверка из терминала
+
+```bash
+curl -s -F "file=@page.jpg" \
+  "http://localhost:8000/api/recognize?engine=trocr&corrector=context" | python3 -m json.tool
+```
+
+---
+
 ## Новые сообщения
 
 <!-- Пишите ниже. Новые сообщения удобно добавлять сверху этого раздела. -->
