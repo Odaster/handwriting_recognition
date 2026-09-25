@@ -32,12 +32,15 @@ def health() -> dict:
     return {"status": "ok", **tesseract_info()}
 
 
+CORRECTORS = {"none", "spell", "context"}
+
+
 @app.post("/api/recognize")
 async def recognize(
     file: UploadFile = File(...),
     lang: str = DEFAULT_LANG,
     engine: str = "tesseract",
-    spellcheck: bool = False,
+    corrector: str = "none",
 ) -> JSONResponse:
     """Recognize text on an uploaded image.
 
@@ -46,7 +49,10 @@ async def recognize(
       * ``trocr`` — neural handwriting model for cursive Russian (heavier/slower,
         requires ``requirements-trocr.txt``).
 
-    ``spellcheck`` additionally returns a dictionary-corrected version of the text.
+    ``corrector`` selects optional text correction, returned as ``text_corrected``:
+      * ``none`` — no correction (default);
+      * ``spell`` — conservative dictionary spell correction (no context);
+      * ``context`` — context-aware SAGE model (fixes spelling/grammar/punctuation).
     """
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
@@ -55,6 +61,8 @@ async def recognize(
         )
     if engine not in {"tesseract", "trocr"}:
         raise HTTPException(status_code=400, detail=f"Unknown engine: {engine}")
+    if corrector not in CORRECTORS:
+        raise HTTPException(status_code=400, detail=f"Unknown corrector: {corrector}")
 
     data = await file.read()
     if not data:
@@ -76,15 +84,19 @@ async def recognize(
         raise HTTPException(status_code=422, detail=f"Recognition failed: {exc}") from exc
 
     payload = result.to_dict()
+    payload["corrector"] = corrector
 
-    if spellcheck:
+    if corrector != "none":
         try:
-            from app.postprocess import correct_text
+            if corrector == "context":
+                from app.corrector import correct_text
+            else:
+                from app.postprocess import correct_text
 
             payload["text_corrected"] = correct_text(payload["text"])
-        except Exception as exc:  # noqa: BLE001 - spellcheck is best-effort
+        except Exception as exc:  # noqa: BLE001 - correction is best-effort
             payload["text_corrected"] = None
-            payload["spellcheck_error"] = str(exc)
+            payload["corrector_error"] = str(exc)
 
     return JSONResponse(payload)
 
