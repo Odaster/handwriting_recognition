@@ -23,6 +23,7 @@ from functools import lru_cache
 from PIL import Image
 
 from app.ocr import RecognitionResult
+from app.textout import html_to_text
 
 PROMPT_TYPE = os.environ.get("CHANDRA_PROMPT", "ocr")
 _MISSING_DEPS_MSG = (
@@ -118,8 +119,11 @@ def recognize_image(image: Image.Image, progress=None) -> RecognitionResult:
         raise RuntimeError(f"Chandra error: {result.error}")
 
     raw = result.raw or ""
-    text = parse_markdown(raw) if PROMPT_TYPE == "ocr_layout" else raw
-    return RecognitionResult(text=text.strip(), confidence=None, words=[], engine="chandra")
+    if PROMPT_TYPE == "ocr_layout":
+        raw = parse_markdown(raw)
+    # Return clean paragraph text (no HTML blocks), structured by the layout.
+    text = html_to_text(raw)
+    return RecognitionResult(text=text, confidence=None, words=[], engine="chandra")
 
 
 def recognize_bytes(data: bytes, progress=None) -> RecognitionResult:

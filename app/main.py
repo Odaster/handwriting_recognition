@@ -3,18 +3,33 @@
 from __future__ import annotations
 
 import io
+import logging
 import re
 import threading
 import time
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from app import jobs, metrics
+from app.export import FORMATS, build_export
 from app.ocr import DEFAULT_LANG, tesseract_info
+
+
+class _AccessLogFilter(logging.Filter):
+    """Drop access-log lines for high-frequency polling endpoints."""
+
+    NOISY = ("/api/progress", "/api/metrics")
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+        message = record.getMessage()
+        return not any(path in message for path in self.NOISY)
+
+
+logging.getLogger("uvicorn.access").addFilter(_AccessLogFilter())
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -198,6 +213,36 @@ def progress(job_id: str) -> JSONResponse:
 @app.get("/api/metrics")
 def system_metrics() -> JSONResponse:
     return JSONResponse(metrics.get_metrics())
+
+
+@app.get("/api/export/{job_id}")
+def export(job_id: str, format: str = "txt", which: str = "text") -> Response:
+    """Download a finished job's text as txt/md/docx/xlsx/pdf.
+
+    ``which`` selects ``text`` (recognized) or ``corrected`` (after correction).
+    """
+    if format not in FORMATS:
+        raise HTTPException(status_code=400, detail=f"Unknown format: {format}")
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown job_id")
+    if job["status"] != "done":
+        raise HTTPException(status_code=409, detail="Job is not finished")
+
+    content = job.get("text") or ""
+    if which == "corrected" and job.get("text_corrected"):
+        content = job["text_corrected"]
+
+    try:
+        data, media_type, ext = build_export(content, format)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="ocr-{job_id[:8]}.{ext}"'},
+    )
 
 
 @app.get("/")
