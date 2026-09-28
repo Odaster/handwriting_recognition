@@ -60,7 +60,34 @@ def _load_model():
     return load_model()
 
 
-def recognize_image(image: Image.Image) -> RecognitionResult:
+class _ProgressStreamer:
+    """Minimal HuggingFace streamer that reports generated-token progress.
+
+    The absolute token total is unknown, so we estimate against a typical page
+    length to drive a moving bar and also expose the raw token count.
+    """
+
+    _ESTIMATE = 1200
+
+    def __init__(self, progress):
+        self._progress = progress
+        self._count = 0
+        self._skipped_prompt = False
+
+    def put(self, value):  # noqa: ANN001 - HF streamer protocol
+        # The first call carries the prompt tokens; skip it.
+        if not self._skipped_prompt:
+            self._skipped_prompt = True
+            return
+        self._count += 1
+        fraction = min(0.98, self._count / self._ESTIMATE)
+        self._progress(fraction, "recognize", token_count=self._count)
+
+    def end(self):  # noqa: ANN001 - HF streamer protocol
+        pass
+
+
+def recognize_image(image: Image.Image, progress=None) -> RecognitionResult:
     """Recognize a full page with Chandra OCR 2 (page-level, layout-aware)."""
     try:
         from chandra.model.hf import generate_hf
@@ -69,9 +96,23 @@ def recognize_image(image: Image.Image) -> RecognitionResult:
     except ImportError as exc:
         raise RuntimeError(_MISSING_DEPS_MSG) from exc
 
+    if progress:
+        progress(0.03, "load")
     model = _load_model()
+    if progress:
+        progress(0.05, "recognize")
+
     item = BatchInputItem(image=image.convert("RGB"), prompt=None, prompt_type=PROMPT_TYPE)
-    result = generate_hf([item], model)[0]
+    streamer = _ProgressStreamer(progress) if progress else None
+    try:
+        result = (
+            generate_hf([item], model, streamer=streamer)[0]
+            if streamer is not None
+            else generate_hf([item], model)[0]
+        )
+    except TypeError:
+        # Older builds may not forward a streamer kwarg — fall back cleanly.
+        result = generate_hf([item], model)[0]
 
     if getattr(result, "error", None):
         raise RuntimeError(f"Chandra error: {result.error}")
@@ -81,5 +122,5 @@ def recognize_image(image: Image.Image) -> RecognitionResult:
     return RecognitionResult(text=text.strip(), confidence=None, words=[], engine="chandra")
 
 
-def recognize_bytes(data: bytes) -> RecognitionResult:
-    return recognize_image(Image.open(io.BytesIO(data)))
+def recognize_bytes(data: bytes, progress=None) -> RecognitionResult:
+    return recognize_image(Image.open(io.BytesIO(data)), progress=progress)

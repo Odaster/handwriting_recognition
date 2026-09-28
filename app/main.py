@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import io
+import threading
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
 
+from app import jobs, metrics
 from app.ocr import DEFAULT_LANG, recognize_bytes, tesseract_info
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -33,6 +38,72 @@ def health() -> dict:
 
 
 CORRECTORS = {"none", "spell", "context"}
+ENGINES = {"tesseract", "trocr", "chandra"}
+
+
+def _run_job(job_id: str, data: bytes, lang: str, engine: str, corrector: str) -> None:
+    """Background worker: recognize + (optionally) correct, updating the job."""
+    start = time.time()
+    jobs.update(job_id, status="running", phase="recognize", progress=0.0)
+
+    def progress(fraction, phase="recognize", **extra):
+        fields = {"phase": phase}
+        if fraction is not None:
+            fields["progress"] = max(0.0, min(0.999, float(fraction)))
+        fields.update(extra)
+        jobs.update(job_id, **fields)
+
+    try:
+        image = Image.open(io.BytesIO(data))
+        if engine == "chandra":
+            from app.chandra_engine import recognize_image as rec
+
+            result = rec(image, progress=progress)
+        elif engine == "trocr":
+            from app.htr import recognize_image as rec
+
+            result = rec(image, progress=progress)
+        else:
+            progress(0.2, "recognize")
+            result = recognize_bytes(data, lang=lang)
+
+        recognize_ms = int((time.time() - start) * 1000)
+        payload = result.to_dict()
+        jobs.update(
+            job_id,
+            text=payload["text"],
+            words=len(payload.get("words", [])),
+            confidence=payload.get("confidence"),
+        )
+
+        corrected = None
+        correct_start = time.time()
+        if corrector != "none":
+            jobs.update(job_id, phase="correct", progress=0.99)
+            try:
+                if corrector == "context":
+                    from app.corrector import correct_text
+                else:
+                    from app.postprocess import correct_text
+                corrected = correct_text(payload["text"])
+            except Exception as exc:  # noqa: BLE001 - correction is best-effort
+                jobs.update(job_id, corrector_error=str(exc))
+        correct_ms = int((time.time() - correct_start) * 1000)
+
+        jobs.update(
+            job_id,
+            status="done",
+            phase="done",
+            progress=1.0,
+            text_corrected=corrected,
+            timing={
+                "recognize_ms": recognize_ms,
+                "correct_ms": correct_ms,
+                "total_ms": int((time.time() - start) * 1000),
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 - surface any failure to the client
+        jobs.update(job_id, status="error", phase="error", error=str(exc))
 
 
 @app.post("/api/recognize")
@@ -42,26 +113,17 @@ async def recognize(
     engine: str = "tesseract",
     corrector: str = "none",
 ) -> JSONResponse:
-    """Recognize text on an uploaded image.
+    """Start an async recognition job and return its ``job_id``.
 
-    ``engine`` selects the backend:
-      * ``tesseract`` — fast, best for printed/neat text (default);
-      * ``trocr`` — neural handwriting model for cursive Russian (heavier/slower,
-        requires ``requirements-trocr.txt``);
-      * ``chandra`` — Chandra OCR 2, a ~5B page-level document VLM (best quality,
-        requires ``requirements-chandra.txt`` and a CUDA GPU with >=16 GB VRAM).
+    Poll ``GET /api/progress/{job_id}`` for live progress, timing and the result.
 
-    ``corrector`` selects optional text correction, returned as ``text_corrected``:
-      * ``none`` — no correction (default);
-      * ``spell`` — conservative dictionary spell correction (no context);
-      * ``context`` — context-aware SAGE model (fixes spelling/grammar/punctuation).
+    ``engine``: ``tesseract`` (printed, CPU), ``trocr`` (handwriting, CPU) or
+    ``chandra`` (Chandra OCR 2, page-level VLM, needs GPU).
+    ``corrector``: ``none`` | ``spell`` (dictionary) | ``context`` (SAGE).
     """
     if file.content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=415,
-            detail=f"Unsupported content type: {file.content_type}",
-        )
-    if engine not in {"tesseract", "trocr", "chandra"}:
+        raise HTTPException(status_code=415, detail=f"Unsupported content type: {file.content_type}")
+    if engine not in ENGINES:
         raise HTTPException(status_code=400, detail=f"Unknown engine: {engine}")
     if corrector not in CORRECTORS:
         raise HTTPException(status_code=400, detail=f"Unknown corrector: {corrector}")
@@ -72,39 +134,24 @@ async def recognize(
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large (max 15 MB)")
 
-    try:
-        if engine == "chandra":
-            from app.chandra_engine import recognize_bytes as recognize_chandra
+    job_id = jobs.create_job(engine=engine, corrector=corrector)
+    threading.Thread(
+        target=_run_job, args=(job_id, data, lang, engine, corrector), daemon=True
+    ).start()
+    return JSONResponse({"job_id": job_id})
 
-            result = recognize_chandra(data)
-        elif engine == "trocr":
-            from app.htr import recognize_bytes as recognize_handwriting
 
-            result = recognize_handwriting(data)
-        else:
-            result = recognize_bytes(data, lang=lang)
-    except RuntimeError as exc:
-        # Missing optional dependencies for the handwriting engine.
-        raise HTTPException(status_code=501, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001 - surface any decode/OCR failure to the client
-        raise HTTPException(status_code=422, detail=f"Recognition failed: {exc}") from exc
+@app.get("/api/progress/{job_id}")
+def progress(job_id: str) -> JSONResponse:
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown job_id")
+    return JSONResponse(job)
 
-    payload = result.to_dict()
-    payload["corrector"] = corrector
 
-    if corrector != "none":
-        try:
-            if corrector == "context":
-                from app.corrector import correct_text
-            else:
-                from app.postprocess import correct_text
-
-            payload["text_corrected"] = correct_text(payload["text"])
-        except Exception as exc:  # noqa: BLE001 - correction is best-effort
-            payload["text_corrected"] = None
-            payload["corrector_error"] = str(exc)
-
-    return JSONResponse(payload)
+@app.get("/api/metrics")
+def system_metrics() -> JSONResponse:
+    return JSONResponse(metrics.get_metrics())
 
 
 @app.get("/")

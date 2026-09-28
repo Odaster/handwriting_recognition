@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -24,17 +26,40 @@ def test_index_served():
     assert "text/html" in resp.headers["content-type"]
 
 
-def test_recognize_endpoint(tmp_path):
-    img = make_image("Тест", tmp_path / "t.png", font_size=52)
-    with open(img, "rb") as fh:
+def _run_to_completion(img_path, params=None, timeout_s=60):
+    with open(img_path, "rb") as fh:
         resp = client.post(
             "/api/recognize",
-            files={"file": ("t.png", fh, "image/png")},
+            params=params or {},
+            files={"file": (img_path.name, fh, "image/png")},
         )
     assert resp.status_code == 200
+    job_id = resp.json()["job_id"]
+
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        job = client.get(f"/api/progress/{job_id}").json()
+        if job["status"] in ("done", "error"):
+            return job
+        time.sleep(0.1)
+    raise AssertionError("job did not finish in time")
+
+
+def test_recognize_endpoint(tmp_path):
+    img = make_image("Тест", tmp_path / "t.png", font_size=52)
+    job = _run_to_completion(img, params={"engine": "tesseract"})
+    assert job["status"] == "done", job.get("error")
+    assert "тест" in job["text"].lower()
+    assert job["confidence"] > 0
+    assert job["timing"]["total_ms"] >= 0
+
+
+def test_metrics_endpoint():
+    resp = client.get("/api/metrics")
+    assert resp.status_code == 200
     body = resp.json()
-    assert "тест" in body["text"].lower()
-    assert body["confidence"] > 0
+    assert "cpu_percent" in body
+    assert "ram_percent" in body
 
 
 def test_recognize_rejects_non_image():
