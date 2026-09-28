@@ -9,6 +9,10 @@
 - **TrOCR (рукописный)** — нейросетевая модель `kazars24/trocr-base-handwritten-ru`,
   дообученная на русском рукописном тексте. Распознаёт **курсив**. Тяжелее и медленнее,
   требует CPU-`torch` + `transformers`; модель (~1.3 ГБ) скачивается при первом запуске.
+- **Chandra OCR 2** (`datalab-to/chandra-ocr-2`) — page-level документный **VLM ~5B**
+  (Qwen3.5-VL) от Datalab: читает страницу целиком (без сегментации), отлично работает
+  с рукописью/таблицами/формами, 90+ языков, топит бенчмарк olmOCR. **Требует CUDA-GPU
+  ≥16 ГБ VRAM** (веса ~10–12 ГБ) — на CPU не запускается.
 
 Ключевая деталь TrOCR: модель ужимает вход до 384×384, поэтому подавать строку целиком
 нельзя — текст разрушается. Пайплайн сегментирует страницу на **строки**, затем на **слова**
@@ -62,6 +66,20 @@ bash scripts/install.sh
 (~3.3 ГБ). На CPU распознавание страницы с beam search занимает единицы–десятки
 минут; ускорить можно через `HTR_BEAMS=1` и лёгкий `SAGE_MODEL` (см. таблицу выше).
 
+### Chandra OCR 2 (`engine=chandra`) — лучшее качество, нужен GPU
+
+Page-level VLM ~5B. Локальный запуск требует **CUDA-GPU ≥16 ГБ VRAM**:
+
+```bash
+.venv/bin/pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
+.venv/bin/pip install -r requirements-chandra.txt
+```
+
+Модель `datalab-to/chandra-ocr-2` (~10–12 ГБ) скачается при первом запуске.
+На CPU-хосте движок сразу вернёт понятную ошибку (загрузка 10 ГБ не запускается).
+Без своего GPU можно использовать хостируемый Datalab API/playground: <https://datalab.to>.
+Режим промпта — `CHANDRA_PROMPT` (`ocr` — текст, по умолчанию; `ocr_layout` — markdown с лейаутом).
+
 ## Запуск
 
 ```bash
@@ -80,7 +98,8 @@ bash scripts/install.sh
 
 Параметры `/api/recognize` (query):
 
-- `engine` — `tesseract` (по умолчанию) или `trocr` (рукописный).
+- `engine` — `tesseract` (по умолчанию), `trocr` (рукописный, CPU) или `chandra`
+  (Chandra OCR 2, page-level VLM, требует GPU).
 - `corrector` — коррекция текста, возвращается в поле `text_corrected`:
   - `none` (по умолчанию) — без коррекции;
   - `spell` — консервативная словарная проверка (без контекста);

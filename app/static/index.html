@@ -120,7 +120,8 @@
         <div class="controls">
           <label for="engine">Движок</label>
           <select id="engine">
-            <option value="trocr">Рукописный (TrOCR, нейросеть)</option>
+            <option value="chandra">Chandra OCR 2 (VLM, требует GPU)</option>
+            <option value="trocr">Рукописный (TrOCR, CPU)</option>
             <option value="tesseract">Печатный (Tesseract, быстро)</option>
           </select>
           <label for="corrector">Коррекция</label>
@@ -130,7 +131,7 @@
             <option value="spell">Словарная</option>
           </select>
         </div>
-        <p class="hint" id="engineHint">Рукописный движок точнее для курсива, но медленнее; при первом запуске скачивается модель (~1.3 ГБ). Контекстная коррекция (SAGE) исправляет орфографию/грамматику с учётом контекста; словарная — консервативная, без контекста.</p>
+        <p class="hint" id="engineHint">Chandra OCR 2 — page-level VLM (~5B), лучшее качество и без сегментации, но требует GPU ≥16 ГБ VRAM. Рукописный (TrOCR) работает на CPU. Коррекция (SAGE) полезна для TrOCR; для Chandra обычно не нужна.</p>
         <button id="recognizeBtn" disabled>Распознать</button>
         <div class="spinner" id="spinner"></div>
         <div class="error" id="error"></div>

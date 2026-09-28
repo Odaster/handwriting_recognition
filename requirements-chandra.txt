@@ -1,0 +1,7 @@
+# Chandra OCR 2 engine (datalab-to/chandra-ocr-2), page-level document VLM (~5B).
+# Requires a CUDA GPU with >=16 GB VRAM for local inference; weights (~10-12 GB)
+# download on first use. Not runnable on CPU-only hosts.
+#
+#   pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
+#   pip install -r requirements-chandra.txt
+chandra-ocr[hf]>=2.0
