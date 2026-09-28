@@ -114,14 +114,15 @@
 <body>
   <div class="container">
     <h1>Распознавание русского текста</h1>
-    <p class="subtitle">Загрузите изображение с рукописным или печатным русским текстом. Движок распознавания и коррекцию можно выбрать ниже.</p>
+    <p class="subtitle">Загрузите изображение или PDF с рукописным или печатным русским текстом. Движок распознавания и коррекцию можно выбрать ниже.</p>
     <div class="grid">
       <div class="panel">
         <div class="dropzone" id="dropzone">
-          <p><strong>Перетащите изображение сюда</strong></p>
+          <p><strong>Перетащите изображение или PDF сюда</strong></p>
           <p>или нажмите, чтобы выбрать файл</p>
-          <input type="file" id="fileInput" accept="image/*" hidden />
+          <input type="file" id="fileInput" accept="image/*,application/pdf" hidden />
           <img id="preview" alt="Предпросмотр" />
+          <p id="fileName" style="display:none; color:var(--text); margin-top:1rem;"></p>
         </div>
         <div class="controls">
           <label for="engine">Движок</label>
@@ -211,6 +212,7 @@
 
     const PHASES = {
       queued: "В очереди",
+      pdf: "Чтение PDF",
       segment: "Сегментация",
       load: "Загрузка модели",
       recognize: "Распознавание",
@@ -219,17 +221,35 @@
       error: "Ошибка",
     };
 
+    function phaseLabel(phase) {
+      if (!phase) return "—";
+      const parts = phase.split(" · ");
+      const label = PHASES[parts[0]] || parts[0];
+      return parts.length > 1 ? label + " · " + parts.slice(1).join(" · ") : label;
+    }
+
+    const fileName = document.getElementById("fileName");
+
     function setFile(file) {
-      if (!file || !file.type.startsWith("image/")) {
-        errorBox.textContent = "Пожалуйста, выберите файл изображения.";
+      const isImage = file && file.type.startsWith("image/");
+      const isPdf = file && file.type === "application/pdf";
+      if (!isImage && !isPdf) {
+        errorBox.textContent = "Пожалуйста, выберите изображение или PDF.";
         return;
       }
       errorBox.textContent = "";
       selectedFile = file;
       recognizeBtn.disabled = false;
-      const reader = new FileReader();
-      reader.onload = (e) => { preview.src = e.target.result; preview.style.display = "block"; };
-      reader.readAsDataURL(file);
+      if (isPdf) {
+        preview.style.display = "none";
+        fileName.style.display = "block";
+        fileName.textContent = "📄 " + file.name;
+      } else {
+        fileName.style.display = "none";
+        const reader = new FileReader();
+        reader.onload = (e) => { preview.src = e.target.result; preview.style.display = "block"; };
+        reader.readAsDataURL(file);
+      }
     }
 
     dropzone.addEventListener("click", () => fileInput.click());
@@ -247,7 +267,7 @@
     function renderTick() {
       const pct = Math.round(lastProgress * 100);
       progressBar.style.width = pct + "%";
-      progressPhase.textContent = PHASES[lastPhase] || lastPhase || "—";
+      progressPhase.textContent = phaseLabel(lastPhase);
       let stats = `${pct}% · ${fmtSecs(Date.now() - runStart)}`;
       if (lastTokens) stats += ` · ${lastTokens} ток.`;
       progressStats.textContent = stats;
@@ -272,6 +292,7 @@
         `<span>Движок: <span class="badge">${job.engine}</span></span>` +
         `<span>Уверенность: <span class="badge">${conf}</span></span>` +
         `<span>Слов: <span class="badge">${job.words || 0}</span></span>`;
+      if (job.pages && job.pages > 1) html += `<span>Страниц: <span class="badge">${job.pages}</span></span>`;
       if (t.total_ms != null) {
         html += `<span>Время: <span class="badge">${fmtSecs(t.total_ms)}</span></span>`;
         if (t.correct_ms) html += `<span>из них коррекция: <span class="badge">${fmtSecs(t.correct_ms)}</span></span>`;

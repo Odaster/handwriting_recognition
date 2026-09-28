@@ -62,6 +62,37 @@ def test_metrics_endpoint():
     assert "ram_percent" in body
 
 
+def test_recognize_pdf(tmp_path):
+    import io as _io
+
+    from PIL import Image
+
+    img = Image.open(make_image("Привет из документа", tmp_path / "p.png", font_size=48)).convert("RGB")
+    buf = _io.BytesIO()
+    img.save(buf, "PDF")
+    pdf_path = tmp_path / "doc.pdf"
+    pdf_path.write_bytes(buf.getvalue())
+
+    with open(pdf_path, "rb") as fh:
+        resp = client.post(
+            "/api/recognize",
+            params={"engine": "tesseract"},
+            files={"file": ("doc.pdf", fh, "application/pdf")},
+        )
+    assert resp.status_code == 200
+    job_id = resp.json()["job_id"]
+    deadline = time.time() + 60
+    while time.time() < deadline:
+        job = client.get(f"/api/progress/{job_id}").json()
+        if job["status"] in ("done", "error"):
+            break
+        time.sleep(0.1)
+    assert job["status"] == "done", job.get("error")
+    assert "привет" in job["text"].lower()
+    assert job["pages"] == 1
+    assert job["words"] >= 2
+
+
 def test_recognize_rejects_non_image():
     resp = client.post(
         "/api/recognize",
