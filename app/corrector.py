@@ -17,6 +17,7 @@ imported here. Install them with ``requirements-trocr.txt``.
 from __future__ import annotations
 
 import os
+import re
 from functools import lru_cache
 
 # Quiet Hugging Face advisory noise, but KEEP download progress bars so the
@@ -50,11 +51,18 @@ def _load():
     return tokenizer, model
 
 
-def _correct_line(tokenizer, model, line: str) -> str:
+# Text content between HTML tags (skips tags and their attributes, so layout
+# markup like data-bbox coordinates from Chandra is never fed to the corrector).
+_HTML_TEXT = re.compile(r"(?<=>)([^<>]+)(?=<)")
+_MAX_WORDS = 50  # chunk long segments to avoid truncating the model's output
+
+
+def _sage(tokenizer, model, text: str) -> str:
     import torch
 
-    inputs = tokenizer(line, return_tensors="pt", truncation=True, max_length=256)
-    max_len = int(inputs["input_ids"].size(1) * 1.5) + 10
+    # No input truncation: we chunk beforehand so nothing is silently cut.
+    inputs = tokenizer(text, return_tensors="pt")
+    max_len = min(1024, int(inputs["input_ids"].size(1) * 1.6) + 16)
     with torch.no_grad():
         generated = model.generate(**inputs, max_length=max_len, num_beams=4)
     # clean_up_tokenization_spaces=False: for BPE tokenizers the cleanup strips
@@ -64,13 +72,35 @@ def _correct_line(tokenizer, model, line: str) -> str:
     )[0]
 
 
+def _correct_segment(tokenizer, model, segment: str) -> str:
+    if not segment.strip():
+        return segment
+    words = segment.split(" ")
+    if len(words) <= _MAX_WORDS:
+        return _sage(tokenizer, model, segment)
+    # Long segment: correct in word chunks and rejoin (prevents truncation).
+    out = [
+        _sage(tokenizer, model, " ".join(words[i : i + _MAX_WORDS]))
+        for i in range(0, len(words), _MAX_WORDS)
+    ]
+    return " ".join(out)
+
+
 def correct_text(text: str) -> str:
-    """Return a context-corrected version of ``text`` (line by line)."""
+    """Return a context-corrected version of ``text``.
+
+    For HTML/markup output (e.g. Chandra's layout HTML) only the visible text
+    nodes are corrected — tags and attributes (``data-bbox`` coordinates) are
+    preserved untouched. Plain text is corrected line by line. Long segments are
+    chunked so the output is never truncated.
+    """
     tokenizer, model = _load()
-    corrected: list[str] = []
-    for line in text.split("\n"):
-        if not line.strip():
-            corrected.append(line)
-        else:
-            corrected.append(_correct_line(tokenizer, model, line))
-    return "\n".join(corrected)
+
+    if "<" in text and ">" in text:
+        return _HTML_TEXT.sub(
+            lambda m: _correct_segment(tokenizer, model, m.group(1)), text
+        )
+
+    return "\n".join(
+        _correct_segment(tokenizer, model, line) for line in text.split("\n")
+    )

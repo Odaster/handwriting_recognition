@@ -8,6 +8,8 @@ opencv-python-headless>=4.10.0
 pytesseract>=0.3.13
 # Dictionary-based Russian spell correction (lightweight, used by post-processing).
 pyspellchecker>=0.8
+# PDF input: render pages to images (pure-Python, no Poppler needed).
+pymupdf>=1.24
 # System metrics (CPU/RAM/network) for the live metrics panel.
 psutil>=5.9
 # Optional NVIDIA GPU metrics (util/VRAM); import is guarded when no GPU/driver.
