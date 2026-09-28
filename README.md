@@ -80,6 +80,26 @@ Page-level VLM ~5B. Локальный запуск требует **CUDA-GPU �
 Без своего GPU можно использовать хостируемый Datalab API/playground: <https://datalab.to>.
 Режим промпта — `CHANDRA_PROMPT` (`ocr` — текст, по умолчанию; `ocr_layout` — markdown с лейаутом).
 
+### Windows
+
+`scripts/install.sh` — только для Linux (внутри `apt`/`sudo`) и на нативном Windows
+не запустится (`bash` уйдёт в WSL). Варианты:
+
+- **WSL2 + Ubuntu (рекомендуется для GPU/ML):** установите WSL2 с Ubuntu, дальше все
+  Linux-инструкции работают как есть, CUDA пробрасывается в WSL2.
+- **Нативный Windows (PowerShell):**
+  ```powershell
+  .\scripts\install.ps1
+  # опционально: TrOCR / Chandra
+  .\.venv\Scripts\python -m pip install -r requirements-trocr.txt
+  .\.venv\Scripts\python -m pip install -r requirements-chandra.txt   # нужен GPU
+  .\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+  ```
+  Tesseract на Windows ставится отдельно (`winget install --id UB-Mannheim.TesseractOCR`,
+  отметьте язык `rus`). Если `tesseract.exe` не в PATH — задайте
+  `$env:TESSERACT_CMD='C:\Program Files\Tesseract-OCR\tesseract.exe'`.
+  Для движка **Chandra** Tesseract не нужен вовсе.
+
 ## Запуск
 
 ```bash
