@@ -8,3 +8,7 @@ opencv-python-headless>=4.10.0
 pytesseract>=0.3.13
 # Dictionary-based Russian spell correction (lightweight, used by post-processing).
 pyspellchecker>=0.8
+# System metrics (CPU/RAM/network) for the live metrics panel.
+psutil>=5.9
+# Optional NVIDIA GPU metrics (util/VRAM); import is guarded when no GPU/driver.
+nvidia-ml-py>=12.0
