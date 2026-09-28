@@ -31,13 +31,6 @@ _MISSING_DEPS_MSG = (
 )
 
 
-_NO_GPU_MSG = (
-    "Chandra OCR 2 (~5B) требует CUDA-GPU с >=16 ГБ VRAM, а на этой машине GPU не найден. "
-    "Запустите на GPU-хосте, либо используйте движок 'trocr' (работает на CPU), "
-    "либо хостируемый Datalab API/playground (datalab.to)."
-)
-
-
 @lru_cache(maxsize=1)
 def _load_model():
     try:
@@ -46,9 +39,24 @@ def _load_model():
     except ImportError as exc:
         raise RuntimeError(_MISSING_DEPS_MSG) from exc
 
-    # Fail fast on CPU-only hosts instead of downloading ~10 GB and hitting OOM.
+    # Fail fast when torch cannot see a CUDA GPU, instead of downloading ~10 GB
+    # and hitting OOM. The most common cause is a CPU-only torch build.
     if not torch.cuda.is_available():
-        raise RuntimeError(_NO_GPU_MSG)
+        build = getattr(torch, "__version__", "?")
+        is_cpu_build = "+cpu" in build or "+cu" not in build
+        hint = (
+            "Похоже, установлена CPU-сборка torch. Переустановите CUDA-версию:\n"
+            "  python -m pip uninstall -y torch torchvision\n"
+            "  python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121"
+            if is_cpu_build
+            else "Проверьте драйвер NVIDIA и совместимость CUDA."
+        )
+        raise RuntimeError(
+            f"torch не видит CUDA-GPU (torch.cuda.is_available() == False; сборка torch: {build}). "
+            f"{hint}\n"
+            "Chandra OCR 2 (~5B) требует CUDA-GPU (для 5B в bf16 нужно ~10–12 ГБ VRAM). "
+            "Альтернатива без GPU: движок 'trocr' (CPU) или хостируемый Datalab API (datalab.to)."
+        )
     return load_model()
 
 
