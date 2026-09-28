@@ -94,6 +94,18 @@
     }
     .error { color: #f87171; margin-top: 0.75rem; font-size: 0.9rem; white-space: pre-wrap; }
 
+    /* Export */
+    .export { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+    .export-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; margin-bottom: 0.6rem; }
+    .export-row label { color: var(--muted); }
+    .export-row select { background: #0b1220; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 0.35rem 0.6rem; }
+    .export-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .export-buttons .exp {
+      width: auto; margin: 0; padding: 0.45rem 0.9rem; font-size: 0.85rem;
+      background: #0b1220; color: var(--text); border: 1px solid var(--border);
+    }
+    .export-buttons .exp:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+
     /* Progress */
     .progress-wrap { display: none; margin-top: 1rem; }
     .progress { height: 10px; background: #0b1220; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
@@ -161,6 +173,22 @@
           <div class="result-text" id="correctedText"></div>
         </div>
         <div class="meta" id="meta"></div>
+        <div class="export" id="exportBar" style="display:none">
+          <div class="export-row">
+            <label for="exportWhich">Экспорт</label>
+            <select id="exportWhich">
+              <option value="text">Распознанный текст</option>
+              <option value="corrected">После коррекции</option>
+            </select>
+          </div>
+          <div class="export-buttons">
+            <button class="exp" data-fmt="txt">TXT</button>
+            <button class="exp" data-fmt="md">Markdown</button>
+            <button class="exp" data-fmt="docx">Word</button>
+            <button class="exp" data-fmt="xlsx">Excel</button>
+            <button class="exp" data-fmt="pdf">PDF</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -280,12 +308,23 @@
       renderTick();
     }
 
+    let currentJobId = null;
+
     function showResult(job) {
+      currentJobId = job.job_id;
       resultText.textContent = job.text || "(текст не распознан)";
+      const exportBar = document.getElementById("exportBar");
+      const whichSel = document.getElementById("exportWhich");
+      const correctedOpt = whichSel.querySelector('option[value="corrected"]');
       if (job.text_corrected) {
         correctedText.textContent = job.text_corrected;
         correctedBlock.style.display = "block";
+        correctedOpt.disabled = false;
+      } else {
+        correctedOpt.disabled = true;
+        whichSel.value = "text";
       }
+      if (job.text) exportBar.style.display = "block";
       const t = job.timing || {};
       const conf = job.confidence != null ? `${job.confidence}%` : "—";
       let html =
@@ -338,6 +377,7 @@
       correctedText.textContent = "";
       meta.innerHTML = "";
       recognizeBtn.disabled = true;
+      document.getElementById("exportBar").style.display = "none";
       progressWrap.style.display = "block";
       progressBar.style.width = "0%";
       progressPhase.textContent = "Старт…";
@@ -367,9 +407,20 @@
       }
     });
 
+    // --- Export ---
+    document.querySelectorAll(".export-buttons .exp").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!currentJobId) return;
+        const fmt = btn.dataset.fmt;
+        const which = document.getElementById("exportWhich").value;
+        window.location.href = `/api/export/${currentJobId}?format=${fmt}&which=${which}`;
+      });
+    });
+
     // --- Live system metrics ---
     function setBar(el, pct) { el.style.width = Math.max(0, Math.min(100, pct)) + "%"; }
     async function pollMetrics() {
+      if (document.hidden) { setTimeout(pollMetrics, 2000); return; }
       try {
         const m = await (await fetch("/api/metrics")).json();
         document.getElementById("mCpu").textContent = `${m.cpu_percent}%`;

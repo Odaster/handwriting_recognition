@@ -62,6 +62,25 @@ def test_metrics_endpoint():
     assert "ram_percent" in body
 
 
+def test_export_formats(tmp_path):
+    img = make_image("Экспорт текста", tmp_path / "e.png", font_size=48)
+    job = _run_to_completion(img, params={"engine": "tesseract"})
+    assert job["status"] == "done"
+    job_id = job["job_id"]
+    for fmt in ("txt", "md", "docx", "xlsx", "pdf"):
+        resp = client.get(f"/api/export/{job_id}", params={"format": fmt})
+        assert resp.status_code == 200, (fmt, resp.text)
+        assert len(resp.content) > 0
+        assert "attachment" in resp.headers.get("content-disposition", "")
+
+
+def test_export_unknown_format(tmp_path):
+    img = make_image("Тест", tmp_path / "u.png", font_size=48)
+    job = _run_to_completion(img, params={"engine": "tesseract"})
+    resp = client.get(f"/api/export/{job['job_id']}", params={"format": "rtf"})
+    assert resp.status_code == 400
+
+
 def test_recognize_pdf(tmp_path):
     import io as _io
 
