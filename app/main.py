@@ -47,7 +47,9 @@ async def recognize(
     ``engine`` selects the backend:
       * ``tesseract`` — fast, best for printed/neat text (default);
       * ``trocr`` — neural handwriting model for cursive Russian (heavier/slower,
-        requires ``requirements-trocr.txt``).
+        requires ``requirements-trocr.txt``);
+      * ``chandra`` — Chandra OCR 2, a ~5B page-level document VLM (best quality,
+        requires ``requirements-chandra.txt`` and a CUDA GPU with >=16 GB VRAM).
 
     ``corrector`` selects optional text correction, returned as ``text_corrected``:
       * ``none`` — no correction (default);
@@ -59,7 +61,7 @@ async def recognize(
             status_code=415,
             detail=f"Unsupported content type: {file.content_type}",
         )
-    if engine not in {"tesseract", "trocr"}:
+    if engine not in {"tesseract", "trocr", "chandra"}:
         raise HTTPException(status_code=400, detail=f"Unknown engine: {engine}")
     if corrector not in CORRECTORS:
         raise HTTPException(status_code=400, detail=f"Unknown corrector: {corrector}")
@@ -71,7 +73,11 @@ async def recognize(
         raise HTTPException(status_code=413, detail="File too large (max 15 MB)")
 
     try:
-        if engine == "trocr":
+        if engine == "chandra":
+            from app.chandra_engine import recognize_bytes as recognize_chandra
+
+            result = recognize_chandra(data)
+        elif engine == "trocr":
             from app.htr import recognize_bytes as recognize_handwriting
 
             result = recognize_handwriting(data)
