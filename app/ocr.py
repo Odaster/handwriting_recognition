@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import os
+import sys
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -10,6 +12,30 @@ import cv2
 import numpy as np
 import pytesseract
 from PIL import Image
+
+
+def _configure_tesseract_cmd() -> None:
+    """Point pytesseract at the Tesseract binary.
+
+    On Linux/macOS it is normally on PATH. On Windows the UB-Mannheim installer
+    puts it under Program Files and it is often not on PATH, so honor a
+    TESSERACT_CMD override and fall back to the common install locations.
+    """
+    override = os.environ.get("TESSERACT_CMD")
+    if override:
+        pytesseract.pytesseract.tesseract_cmd = override
+        return
+    if sys.platform.startswith("win"):
+        for candidate in (
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        ):
+            if os.path.exists(candidate):
+                pytesseract.pytesseract.tesseract_cmd = candidate
+                return
+
+
+_configure_tesseract_cmd()
 
 DEFAULT_LANG = "rus"
 
