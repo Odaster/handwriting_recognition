@@ -156,7 +156,12 @@ def system_metrics() -> JSONResponse:
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    # Disable caching so the browser never runs a stale UI (the inline JS must
+    # stay in sync with the API contract).
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
