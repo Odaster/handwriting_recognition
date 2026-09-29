@@ -1,0 +1,20 @@
+# Runtime dependencies (Tesseract-based OCR, path B — no torch/CUDA)
+fastapi>=0.115.0,<1
+uvicorn[standard]>=0.32.0,<1
+python-multipart>=0.0.12
+pillow>=10.4.0
+numpy>=1.26.0
+opencv-python-headless>=4.10.0
+pytesseract>=0.3.13
+# Dictionary-based Russian spell correction (lightweight, used by post-processing).
+pyspellchecker>=0.8
+# PDF input: render pages to images (pure-Python, no Poppler needed).
+pymupdf>=1.24
+# System metrics (CPU/RAM/network) for the live metrics panel.
+psutil>=5.9
+# Optional NVIDIA GPU metrics (util/VRAM); import is guarded when no GPU/driver.
+nvidia-ml-py>=12.0
+# Export to Word / Excel / PDF.
+python-docx>=1.1
+openpyxl>=3.1
+reportlab>=4.0

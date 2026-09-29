@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Распознавание русского текста</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .container { width: 100%; max-width: 900px; }
+    h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+    .subtitle { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.95rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem;
+    }
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 2rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .dropzone.dragover { border-color: var(--accent); background: rgba(99,102,241,0.08); }
+    .dropzone p { margin: 0.4rem 0; color: var(--muted); }
+    #preview { max-width: 100%; max-height: 260px; margin-top: 1rem; border-radius: 10px; display: none; }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 0.7rem 1.2rem;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 1rem;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .result-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0b1220;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      min-height: 160px;
+      font-size: 1.05rem;
+      line-height: 1.5;
+    }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 1rem; font-size: 0.9rem; }
+    .controls label { color: var(--muted); }
+    .controls select {
+      background: #0b1220; color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.4rem 0.6rem; font-size: 0.9rem;
+    }
+    .controls .check { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+    .hint { color: var(--muted); font-size: 0.8rem; margin: 0.5rem 0 0; }
+    .result-block + .result-block { margin-top: 1rem; }
+    .result-title { font-size: 0.8rem; color: var(--accent-hover); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.35rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.75rem; color: var(--muted); font-size: 0.9rem; }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(99,102,241,0.15);
+      color: var(--accent-hover);
+      font-weight: 600;
+    }
+    .error { color: #f87171; margin-top: 0.75rem; font-size: 0.9rem; white-space: pre-wrap; }
+
+    /* Export */
+    .export { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+    .export-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; margin-bottom: 0.6rem; }
+    .export-row label { color: var(--muted); }
+    .export-row select { background: #0b1220; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 0.35rem 0.6rem; }
+    .export-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .export-buttons .exp {
+      width: auto; margin: 0; padding: 0.45rem 0.9rem; font-size: 0.85rem;
+      background: #0b1220; color: var(--text); border: 1px solid var(--border);
+    }
+    .export-buttons .exp:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+
+    /* Progress */
+    .progress-wrap { display: none; margin-top: 1rem; }
+    .progress { height: 10px; background: #0b1220; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+    .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-hover)); transition: width 0.3s ease; }
+    .progress-info { display: flex; justify-content: space-between; gap: 0.75rem; margin-top: 0.4rem; color: var(--muted); font-size: 0.82rem; }
+
+    /* Metrics */
+    .metrics { margin-top: 1.25rem; }
+    .metrics-title { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.6rem; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; }
+    .metric { background: #0b1220; border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.8rem; }
+    .metric .k { color: var(--muted); font-size: 0.75rem; }
+    .metric .v { font-size: 1.05rem; font-weight: 600; margin-top: 0.15rem; }
+    .metric .bar { height: 5px; background: #1e293b; border-radius: 999px; margin-top: 0.4rem; overflow: hidden; }
+    .metric .bar > i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width 0.4s ease; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Распознавание русского текста</h1>
+    <p class="subtitle">Загрузите изображение или PDF с рукописным или печатным русским текстом. Движок распознавания и коррекцию можно выбрать ниже.</p>
+    <div class="grid">
+      <div class="panel">
+        <div class="dropzone" id="dropzone">
+          <p><strong>Перетащите изображение или PDF сюда</strong></p>
+          <p>или нажмите, чтобы выбрать файл</p>
+          <input type="file" id="fileInput" accept="image/*,application/pdf" hidden />
+          <img id="preview" alt="Предпросмотр" />
+          <p id="fileName" style="display:none; color:var(--text); margin-top:1rem;"></p>
+        </div>
+        <div class="controls">
+          <label for="engine">Движок</label>
+          <select id="engine">
+            <option value="chandra">Chandra OCR 2 (VLM, требует GPU)</option>
+            <option value="trocr">Рукописный (TrOCR, CPU)</option>
+            <option value="tesseract">Печатный (Tesseract, быстро)</option>
+          </select>
+          <label for="corrector">Коррекция</label>
+          <select id="corrector">
+            <option value="context">Контекстная (SAGE 1.7B)</option>
+            <option value="none">Нет</option>
+            <option value="spell">Словарная</option>
+          </select>
+        </div>
+        <p class="hint" id="engineHint">Chandra OCR 2 — page-level VLM (~5B), лучшее качество без сегментации. На 12 ГБ VRAM Chandra и SAGE 1.7B работают по очереди (не одновременно). Рукописный (TrOCR) работает на CPU.</p>
+        <button id="recognizeBtn" disabled>Распознать</button>
+
+        <div class="progress-wrap" id="progressWrap">
+          <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+          <div class="progress-info">
+            <span id="progressPhase">—</span>
+            <span id="progressStats">0% · 0.0 c</span>
+          </div>
+        </div>
+
+        <div class="error" id="error"></div>
+      </div>
+      <div class="panel">
+        <div class="result-block">
+          <div class="result-title">Распознанный текст</div>
+          <div class="result-text" id="resultText">Здесь появится распознанный текст…</div>
+        </div>
+        <div class="result-block" id="correctedBlock" style="display:none">
+          <div class="result-title">После коррекции</div>
+          <div class="result-text" id="correctedText"></div>
+        </div>
+        <div class="meta" id="meta"></div>
+        <div class="export" id="exportBar" style="display:none">
+          <div class="export-row">
+            <label for="exportWhich">Экспорт</label>
+            <select id="exportWhich">
+              <option value="text">Распознанный текст</option>
+              <option value="corrected">После коррекции</option>
+            </select>
+          </div>
+          <div class="export-buttons">
+            <button class="exp" data-fmt="txt">TXT</button>
+            <button class="exp" data-fmt="md">Markdown</button>
+            <button class="exp" data-fmt="docx">Word</button>
+            <button class="exp" data-fmt="xlsx">Excel</button>
+            <button class="exp" data-fmt="pdf">PDF</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel metrics">
+      <div class="metrics-title">Метрики системы</div>
+      <div class="metrics-grid">
+        <div class="metric">
+          <div class="k">CPU</div><div class="v" id="mCpu">—</div>
+          <div class="bar"><i id="mCpuBar"></i></div>
+        </div>
+        <div class="metric">
+          <div class="k">Память (RAM)</div><div class="v" id="mRam">—</div>
+          <div class="bar"><i id="mRamBar"></i></div>
+        </div>
+        <div class="metric">
+          <div class="k" id="mGpuName">GPU</div><div class="v" id="mGpu">—</div>
+          <div class="bar"><i id="mGpuBar"></i></div>
+        </div>
+        <div class="metric">
+          <div class="k">Сеть ↑↓ (Мбит/с)</div><div class="v" id="mNet">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const preview = document.getElementById("preview");
+    const recognizeBtn = document.getElementById("recognizeBtn");
+    const resultText = document.getElementById("resultText");
+    const correctedBlock = document.getElementById("correctedBlock");
+    const correctedText = document.getElementById("correctedText");
+    const meta = document.getElementById("meta");
+    const errorBox = document.getElementById("error");
+    const engineSelect = document.getElementById("engine");
+    const correctorSelect = document.getElementById("corrector");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressBar = document.getElementById("progressBar");
+    const progressPhase = document.getElementById("progressPhase");
+    const progressStats = document.getElementById("progressStats");
+
+    let selectedFile = null;
+    let runStart = 0;      // client-side timer start (ms)
+    let timerHandle = null;
+    let lastProgress = 0;
+    let lastPhase = "queued";
+    let lastTokens = 0;
+
+    const PHASES = {
+      queued: "В очереди",
+      pdf: "Чтение PDF",
+      segment: "Сегментация",
+      load: "Загрузка модели",
+      recognize: "Распознавание",
+      correct: "Коррекция текста",
+      done: "Готово",
+      error: "Ошибка",
+    };
+
+    function phaseLabel(phase) {
+      if (!phase) return "—";
+      const parts = phase.split(" · ");
+      const label = PHASES[parts[0]] || parts[0];
+      return parts.length > 1 ? label + " · " + parts.slice(1).join(" · ") : label;
+    }
+
+    const fileName = document.getElementById("fileName");
+
+    function setFile(file) {
+      const isImage = file && file.type.startsWith("image/");
+      const isPdf = file && file.type === "application/pdf";
+      if (!isImage && !isPdf) {
+        errorBox.textContent = "Пожалуйста, выберите изображение или PDF.";
+        return;
+      }
+      errorBox.textContent = "";
+      selectedFile = file;
+      recognizeBtn.disabled = false;
+      if (isPdf) {
+        preview.style.display = "none";
+        fileName.style.display = "block";
+        fileName.textContent = "📄 " + file.name;
+      } else {
+        fileName.style.display = "none";
+        const reader = new FileReader();
+        reader.onload = (e) => { preview.src = e.target.result; preview.style.display = "block"; };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    dropzone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => setFile(e.target.files[0]));
+    ["dragenter", "dragover"].forEach((evt) =>
+      dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add("dragover"); }));
+    ["dragleave", "drop"].forEach((evt) =>
+      dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove("dragover"); }));
+    dropzone.addEventListener("drop", (e) => setFile(e.dataTransfer.files[0]));
+
+    function fmtSecs(ms) { return (ms / 1000).toFixed(1) + " c"; }
+
+    // Client-side ticking timer so the elapsed time never freezes between
+    // server updates (a single slow batch/generate may not report for a while).
+    function renderTick() {
+      const pct = Math.round(lastProgress * 100);
+      progressBar.style.width = pct + "%";
+      progressPhase.textContent = phaseLabel(lastPhase);
+      let stats = `${pct}% · ${fmtSecs(Date.now() - runStart)}`;
+      if (lastTokens) stats += ` · ${lastTokens} ток.`;
+      progressStats.textContent = stats;
+    }
+
+    function renderProgress(job) {
+      lastProgress = job.progress || 0;
+      lastPhase = job.phase || "—";
+      lastTokens = job.token_count || 0;
+      renderTick();
+    }
+
+    let currentJobId = null;
+
+    function showResult(job) {
+      currentJobId = job.job_id;
+      resultText.textContent = job.text || "(текст не распознан)";
+      const exportBar = document.getElementById("exportBar");
+      const whichSel = document.getElementById("exportWhich");
+      const correctedOpt = whichSel.querySelector('option[value="corrected"]');
+      if (job.text_corrected) {
+        correctedText.textContent = job.text_corrected;
+        correctedBlock.style.display = "block";
+        correctedOpt.disabled = false;
+      } else {
+        correctedOpt.disabled = true;
+        whichSel.value = "text";
+      }
+      if (job.text) exportBar.style.display = "block";
+      const t = job.timing || {};
+      const conf = job.confidence != null ? `${job.confidence}%` : "—";
+      let html =
+        `<span>Движок: <span class="badge">${job.engine}</span></span>` +
+        `<span>Уверенность: <span class="badge">${conf}</span></span>` +
+        `<span>Слов: <span class="badge">${job.words || 0}</span></span>`;
+      if (job.pages) html += `<span>Страниц: <span class="badge">${job.pages}</span></span>`;
+      if (t.total_ms != null) {
+        html += `<span>Время: <span class="badge">${fmtSecs(t.total_ms)}</span></span>`;
+        if (t.correct_ms) html += `<span>из них коррекция: <span class="badge">${fmtSecs(t.correct_ms)}</span></span>`;
+      }
+      meta.innerHTML = html;
+      if (job.corrector_error) errorBox.textContent = "Коррекция недоступна: " + job.corrector_error;
+    }
+
+    async function pollJob(jobId) {
+      try {
+        const resp = await fetch(`/api/progress/${jobId}`);
+        if (!resp.ok) throw new Error(`Ошибка сервера (${resp.status})`);
+        const job = await resp.json();
+        renderProgress(job);
+        if (job.status === "done") {
+          showResult(job);
+          finishRun();
+          return;
+        }
+        if (job.status === "error") {
+          errorBox.textContent = job.error || "Неизвестная ошибка";
+          finishRun();
+          return;
+        }
+        setTimeout(() => pollJob(jobId), 400);
+      } catch (err) {
+        errorBox.textContent = err.message;
+        finishRun();
+      }
+    }
+
+    function finishRun() {
+      recognizeBtn.disabled = false;
+      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
+      setTimeout(() => { progressWrap.style.display = "none"; }, 2000);
+    }
+
+    recognizeBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+      errorBox.textContent = "";
+      resultText.textContent = "";
+      correctedBlock.style.display = "none";
+      correctedText.textContent = "";
+      meta.innerHTML = "";
+      recognizeBtn.disabled = true;
+      document.getElementById("exportBar").style.display = "none";
+      progressWrap.style.display = "block";
+      progressBar.style.width = "0%";
+      progressPhase.textContent = "Старт…";
+      progressStats.textContent = "0% · 0.0 c";
+      runStart = Date.now();
+      lastProgress = 0; lastPhase = "queued"; lastTokens = 0;
+      if (timerHandle) clearInterval(timerHandle);
+      timerHandle = setInterval(renderTick, 200);
+
+      const engine = engineSelect.value;
+      const corrector = correctorSelect.value;
+      const params = new URLSearchParams({ engine, corrector });
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      try {
+        const resp = await fetch(`/api/recognize?${params}`, { method: "POST", body: formData });
+        if (!resp.ok) {
+          const detail = await resp.json().catch(() => ({}));
+          throw new Error(detail.detail || `Ошибка сервера (${resp.status})`);
+        }
+        const { job_id } = await resp.json();
+        pollJob(job_id);
+      } catch (err) {
+        errorBox.textContent = err.message;
+        finishRun();
+      }
+    });
+
+    // --- Export ---
+    document.querySelectorAll(".export-buttons .exp").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!currentJobId) return;
+        const fmt = btn.dataset.fmt;
+        const which = document.getElementById("exportWhich").value;
+        window.location.href = `/api/export/${currentJobId}?format=${fmt}&which=${which}`;
+      });
+    });
+
+    // --- Live system metrics ---
+    function setBar(el, pct) { el.style.width = Math.max(0, Math.min(100, pct)) + "%"; }
+    async function pollMetrics() {
+      if (document.hidden) { setTimeout(pollMetrics, 2000); return; }
+      try {
+        const m = await (await fetch("/api/metrics")).json();
+        document.getElementById("mCpu").textContent = `${m.cpu_percent}%`;
+        setBar(document.getElementById("mCpuBar"), m.cpu_percent);
+        document.getElementById("mRam").textContent = `${m.ram_used_gb} / ${m.ram_total_gb} ГБ`;
+        setBar(document.getElementById("mRamBar"), m.ram_percent);
+        const net = document.getElementById("mNet");
+        net.textContent = `↑ ${m.net_sent_mbps} · ↓ ${m.net_recv_mbps}`;
+        const gpuName = document.getElementById("mGpuName");
+        const gpu = document.getElementById("mGpu");
+        const gpuBar = document.getElementById("mGpuBar");
+        if (m.gpu) {
+          gpuName.textContent = "GPU · " + m.gpu.name;
+          const util = m.gpu.util_percent;
+          const memPct = m.gpu.mem_total_gb ? (m.gpu.mem_used_gb / m.gpu.mem_total_gb) * 100 : 0;
+          gpu.textContent = (util != null ? `${util}% · ` : "") + `${m.gpu.mem_used_gb}/${m.gpu.mem_total_gb} ГБ`;
+          setBar(gpuBar, util != null ? util : memPct);
+        } else {
+          gpuName.textContent = "GPU";
+          gpu.textContent = "нет";
+          setBar(gpuBar, 0);
+        }
+      } catch (e) { /* ignore transient metric errors */ }
+      setTimeout(pollMetrics, 1000);
+    }
+    pollMetrics();
+  </script>
+</body>
+</html>
