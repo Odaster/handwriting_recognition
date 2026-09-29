@@ -331,7 +331,7 @@
         `<span>Движок: <span class="badge">${job.engine}</span></span>` +
         `<span>Уверенность: <span class="badge">${conf}</span></span>` +
         `<span>Слов: <span class="badge">${job.words || 0}</span></span>`;
-      if (job.pages && job.pages > 1) html += `<span>Страниц: <span class="badge">${job.pages}</span></span>`;
+      if (job.pages) html += `<span>Страниц: <span class="badge">${job.pages}</span></span>`;
       if (t.total_ms != null) {
         html += `<span>Время: <span class="badge">${fmtSecs(t.total_ms)}</span></span>`;
         if (t.correct_ms) html += `<span>из них коррекция: <span class="badge">${fmtSecs(t.correct_ms)}</span></span>`;
