@@ -25,8 +25,20 @@
 - **TrOCR** (`transformers`, CPU-`torch`) — рукописный текст
 - **OpenCV / Pillow / NumPy / SciPy** — предобработка и сегментация
 - **Коррекция текста** (опционально):
-  - **SAGE** (`ai-forever/sage-fredt5-large` по умолчанию) — контекстный корректор орфографии/грамматики/пунктуации;
+  - **SAGE 1.7B** (`ai-forever/sage-v1.1.0`, токенизатор `ai-forever/FRED-T5-1.7B`) —
+    контекстный корректор орфографии/грамматики/пунктуации (~7 ГБ). Репозитория
+    `sage-fredt5-1.7b` на Hugging Face нет: официальный чекпойнт 1.7B — `sage-v1.1.0`.
   - **pyspellchecker** — консервативная словарная проверка (без контекста).
+
+Chandra (~5B) и SAGE 1.7B **не держатся в VRAM одновременно**: загрузка одной
+модели выгружает другую (`app/models.py`). На RTX 4070 Super 12 ГБ они идут
+строго по очереди: сначала страница Chandra, затем корректор SAGE.
+
+Старый кэш `sage-fredt5-large` можно удалить:
+
+```bash
+python scripts/cleanup_old_hf_cache.py
+```
 
 ### Выбор моделей (переменные окружения)
 
@@ -34,11 +46,12 @@
 | --- | --- | --- |
 | `HTR_MODEL` | `kazars24/trocr-base-handwritten-ru` | Рукописная модель TrOCR |
 | `HTR_BEAMS` | `4` | Ширина beam search (1 = greedy, быстрее и чуть хуже) |
-| `SAGE_MODEL` | `ai-forever/sage-fredt5-large` | Контекстный корректор (`…-distilled-95m` — легче/быстрее) |
+| `SAGE_MODEL` | `ai-forever/sage-v1.1.0` | Контекстный корректор 1.7B (`…-distilled-95m` — легче/быстрее) |
+| `SAGE_TOKENIZER` | `ai-forever/FRED-T5-1.7B` для `sage-v1.1.0` | Токенизатор SAGE (для distilled/large — тот же репозиторий, что и модель) |
 
-Приоритет по умолчанию — **качество**: сильный корректор `sage-fredt5-large` (~3.3 ГБ)
-и beam search. На CPU полная страница распознаётся заметно дольше (единицы–десятки минут);
-для скорости выставьте `HTR_BEAMS=1` и `SAGE_MODEL=ai-forever/sage-fredt5-distilled-95m`.
+Приоритет по умолчанию — **качество**: SAGE 1.7B (~7 ГБ) и beam search.
+На CPU полная страница распознаётся заметно дольше; для скорости выставьте
+`HTR_BEAMS=1` и `SAGE_MODEL=ai-forever/sage-fredt5-distilled-95m`.
 
 ## Форматы ввода
 
@@ -75,8 +88,8 @@ bash scripts/install.sh
 ```
 
 Модели скачаются автоматически при первом распознавании: рукописная
-`kazars24/trocr-base-handwritten-ru` (~1.3 ГБ) и корректор `sage-fredt5-large`
-(~3.3 ГБ). На CPU распознавание страницы с beam search занимает единицы–десятки
+`kazars24/trocr-base-handwritten-ru` (~1.3 ГБ) и корректор `sage-v1.1.0`
+(~7 ГБ; токенизатор FRED-T5-1.7B). На CPU распознавание страницы с beam search занимает единицы–десятки
 минут; ускорить можно через `HTR_BEAMS=1` и лёгкий `SAGE_MODEL` (см. таблицу выше).
 
 ### Chandra OCR 2 (`engine=chandra`) — лучшее качество, нужен GPU
@@ -89,6 +102,7 @@ Page-level VLM ~5B. Локальный запуск требует **CUDA-GPU �
 ```
 
 Модель `datalab-to/chandra-ocr-2` (~10–12 ГБ) скачается при первом запуске.
+На 12 ГБ VRAM держите Chandra и SAGE **по очереди** (так и работает пайплайн).
 На CPU-хосте движок сразу вернёт понятную ошибку (загрузка 10 ГБ не запускается).
 Без своего GPU можно использовать хостируемый Datalab API/playground: <https://datalab.to>.
 Режим промпта — `CHANDRA_PROMPT` (`ocr` — текст, по умолчанию; `ocr_layout` — markdown с лейаутом).

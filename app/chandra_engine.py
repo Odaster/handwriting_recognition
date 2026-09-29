@@ -5,8 +5,10 @@ no line/word segmentation and no separate corrector needed. It handles cursive
 handwriting, layout, tables and 90+ languages (incl. Russian) and tops the
 olmOCR benchmark.
 
-Hardware: local inference needs a **CUDA GPU with >=16 GB VRAM** (bf16 weights
-~10-12 GB) and 16+ GB RAM. On CPU-only hosts the model will not load. Enable with:
+Hardware: local inference needs a **CUDA GPU** (bf16 weights ~10–12 GB VRAM)
+and 16+ GB RAM. On a 12 GB card (e.g. RTX 4070 Super) Chandra and SAGE 1.7B
+run **one at a time** — they never share VRAM. On CPU-only hosts the model will
+not load. Enable with:
 
     pip install -r requirements-chandra.txt   # installs chandra-ocr[hf]
 
@@ -17,13 +19,15 @@ Prompt mode via CHANDRA_PROMPT: "ocr" (plain text, default) or "ocr_layout"
 from __future__ import annotations
 
 import io
+import logging
 import os
-from functools import lru_cache
 
 from PIL import Image
 
 from app.ocr import RecognitionResult
 from app.textout import html_to_text
+
+log = logging.getLogger(__name__)
 
 PROMPT_TYPE = os.environ.get("CHANDRA_PROMPT", "ocr")
 _MISSING_DEPS_MSG = (
@@ -32,8 +36,7 @@ _MISSING_DEPS_MSG = (
 )
 
 
-@lru_cache(maxsize=1)
-def _load_model():
+def _loader():
     try:
         import torch
         from chandra.model.hf import load_model
@@ -58,7 +61,16 @@ def _load_model():
             "Chandra OCR 2 (~5B) требует CUDA-GPU (для 5B в bf16 нужно ~10–12 ГБ VRAM). "
             "Альтернатива без GPU: движок 'trocr' (CPU) или хостируемый Datalab API (datalab.to)."
         )
+    log.info("Loading Chandra OCR 2 onto GPU")
     return load_model()
+
+
+def _load_model():
+    # Routed through the model manager so loading Chandra evicts SAGE from VRAM
+    # (and vice versa) — they never occupy the GPU at the same time.
+    from app import models
+
+    return models.load("chandra", _loader)
 
 
 class _ProgressStreamer:

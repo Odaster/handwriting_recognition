@@ -44,6 +44,10 @@
 - ✅ `scripts/install.sh` доработан под чистую Ubuntu 24.04 (добавлен `python3-venv`/`python3-pip`).
 - ✅ Разобрана ошибка `not a git repository` — нужно клонировать репозиторий заново (инструкция была в `text_chat`).
 - ✅ Результат распознавания добавлен в конец `README.md` (скриншот).
+- ✅ SAGE апгрейд до 1.7B: чекпойнт `ai-forever/sage-v1.1.0` + токенизатор `FRED-T5-1.7B`
+  (репозитория `sage-fredt5-1.7b` на HF нет). Chandra и SAGE не делят VRAM:
+  `app/models.py` выгружает одну перед загрузкой другой. Старый `sage-fredt5-large`
+  чистится скриптом `python scripts/cleanup_old_hf_cache.py`.
 
 ---
 
@@ -73,8 +77,8 @@ bash scripts/install.sh
 ### Что скачается при первом запуске (с HuggingFace, по HTTPS)
 
 - TrOCR `kazars24/trocr-base-handwritten-ru` — ~1.3 ГБ
-- Корректор `ai-forever/sage-fredt5-large` — ~3.3 ГБ
-- CPU-`torch` — ~190 МБ
+- Корректор `ai-forever/sage-v1.1.0` (1.7B, токенизатор `FRED-T5-1.7B`) — ~7 ГБ
+- CPU-`torch` — ~190 МБ (на Windows GPU — CUDA torch)
 
 ### Скорость vs качество (env-переменные)
 
@@ -113,6 +117,24 @@ curl -s -F "file=@page.jpg" \
 ## Новые сообщения
 
 <!-- Пишите ниже. Новые сообщения удобно добавлять сверху этого раздела. -->
+
+**Почему не качались 7 ГБ SAGE 1.7B.** Uvicorn запускался из
+`C:\hand\handwriting_recognition` (родитель), а правки 1.7B лежали во вложенном
+git-клоне `...\handwriting_recognition\handwriting_recognition`. Родительский
+`app/corrector.py` по-прежнему дефолтил `ai-forever/sage-fredt5-large`. Логи
+совпадают с large: tokenizer-файлы (vocab/merges/added_tokens) +
+`generation_config.json` (у `FRED-T5-1.7B` этого файла нет; у `sage-v1.1.0` нет
+токенизатора в репозитории). `Loading weights: 558/558` за 1 с — веса large
+поднялись из уже лежащих HF blobs, без нового `model.safetensors`. В кэше нет
+`models--ai-forever--sage-v1.1.0`. Код 1.7B скопирован в родительский `app/`.
+При старте печатается `app loaded from ...` и `SAGE_MODEL=...`. Веса
+`sage-v1.1.0` качаются явно (`snapshot_download` ≥4 ГБ), иначе ошибка.
+
+**SAGE 1.7B + exclusive VRAM.** Дефолт корректора: `ai-forever/sage-v1.1.0` (1.7B)
+с токенизатором `ai-forever/FRED-T5-1.7B` и префиксом `<LM>`. Chandra и SAGE
+на 12 ГБ идут строго по очереди (`app/models.py`). Старый кэш:
+`python scripts/cleanup_old_hf_cache.py`.
+
 vmuser@vmuser-VMware-Virtual-Platform:~/handwriting_recognition$ .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 INFO:     Started server process [8076]
 INFO:     Waiting for application startup.

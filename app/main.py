@@ -30,6 +30,7 @@ class _AccessLogFilter(logging.Filter):
 
 
 logging.getLogger("uvicorn.access").addFilter(_AccessLogFilter())
+logging.getLogger("app").setLevel(logging.INFO)
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -59,7 +60,25 @@ app = FastAPI(title="Russian Handwriting Recognition", version="0.1.0")
 @app.get("/api/health")
 def health() -> dict:
     """Report service status plus the detected Tesseract version/languages."""
-    return {"status": "ok", **tesseract_info()}
+    from app.corrector import _model_ids
+
+    sage_model, sage_tokenizer = _model_ids()
+    return {
+        "status": "ok",
+        **tesseract_info(),
+        "app_path": str(BASE_DIR),
+        "sage_model": sage_model,
+        "sage_tokenizer": sage_tokenizer,
+    }
+
+
+@app.on_event("startup")
+def _log_where_we_loaded() -> None:
+    from app.corrector import _model_ids
+
+    sage_model, sage_tokenizer = _model_ids()
+    print(f"[handwriting] app loaded from {BASE_DIR}", flush=True)
+    print(f"[handwriting] SAGE_MODEL={sage_model}  SAGE_TOKENIZER={sage_tokenizer}", flush=True)
 
 
 CORRECTORS = {"none", "spell", "context"}
@@ -141,11 +160,18 @@ def _run_job(job_id: str, data: bytes, content_type: str, lang: str, engine: str
             jobs.update(job_id, phase="correct", progress=0.99)
             try:
                 if corrector == "context":
+                    from app import models
                     from app.corrector import correct_text
+
+                    # Chandra ~5B and SAGE 1.7B cannot share a 12 GB card.
+                    # Drop Chandra before SAGE loads so they never coexist in VRAM.
+                    models.unload("chandra")
                 else:
                     from app.postprocess import correct_text
                 corrected = correct_text(combined)
             except Exception as exc:  # noqa: BLE001 - correction is best-effort
+                logging.getLogger("app").exception("SAGE/corrector failed")
+                print(f"[handwriting] corrector failed: {exc}", flush=True)
                 jobs.update(job_id, corrector_error=str(exc))
         correct_ms = int((time.time() - correct_start) * 1000)
 
