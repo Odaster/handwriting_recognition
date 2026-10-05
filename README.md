@@ -18,8 +18,6 @@
 | `spell` | словарь `pyspellchecker` |
 | `context` | SAGE 1.7B (`ai-forever/sage-v1.1.0` + `FRED-T5-1.7B`), затем `cursivefix` (pymorphy3, lookalike для OOV) |
 
-T-lite 8B: `CORRECTOR_MODEL=t-tech/T-lite-it-2.1` (4-bit, ≤16 ГБ). bf16 8B на 12 ГБ не влезает.
-
 Chandra и корректор в VRAM **по очереди** (`app/models.py`).
 
 ## Обработка Chandra
@@ -78,7 +76,6 @@ SSL/прокси pip: `--trusted-host pypi.org --trusted-host files.pythonhosted
 | `CORRECTOR_MODEL` / `SAGE_MODEL` | `ai-forever/sage-v1.1.0` | |
 | `SAGE_TOKENIZER` | `ai-forever/FRED-T5-1.7B` | |
 | `SAGE_BEAMS` | `1` (1.7B) | |
-| `CORRECTOR_QUANT` | `auto` | 4-bit для T-lite |
 | `CHANDRA_PROMPT` | `ocr` | `ocr_layout` — markdown лейаута |
 | `CHANDRA_ENHANCE` | `1` | |
 | `CHANDRA_STRIPS` | `3` | `1` — целая страница |
@@ -88,4 +85,4 @@ SSL/прокси pip: `--trusted-host pypi.org --trusted-host files.pythonhosted
 
 ## Ограничения
 
-Tesseract не читает курсив. Chandra путает похожие буквы и может подставить другое словарное слово. SAGE чинит опечатки, не смысл. `CHANDRA_REFINE=1` дописывает текст. Offload 8B в RAM — PCIe, не видеопамять.
+Tesseract не читает курсив. Chandra путает похожие буквы и может подставить другое словарное слово. SAGE чинит опечатки, не смысл. `CHANDRA_REFINE=1` дописывает текст.
