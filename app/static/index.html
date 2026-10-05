@@ -28,13 +28,22 @@
     .container { width: 100%; max-width: 900px; }
     h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
     .subtitle { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.95rem; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
-    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    .stack { display: flex; flex-direction: column; gap: 1.25rem; }
+    .upload-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+      align-items: stretch;
+      min-width: 0;
+    }
+    @media (max-width: 720px) { .upload-row { grid-template-columns: 1fr; } }
+    .upload-side { display: flex; flex-direction: column; min-width: 0; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 1.25rem;
+      overflow: hidden;
     }
     .dropzone {
       border: 2px dashed var(--border);
@@ -43,6 +52,10 @@
       text-align: center;
       cursor: pointer;
       transition: border-color 0.2s, background 0.2s;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
     .dropzone.dragover { border-color: var(--accent); background: rgba(99,102,241,0.08); }
     .dropzone p { margin: 0.4rem 0; color: var(--muted); }
@@ -67,20 +80,32 @@
       background: #0b1220;
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 1rem;
+      padding: 1rem 1.25rem;
       min-height: 160px;
       font-size: 1.05rem;
       line-height: 1.5;
+      text-align: center;
     }
-    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 1rem; font-size: 0.9rem; }
-    .controls label { color: var(--muted); }
-    .controls select {
+    .results .result-title { text-align: center; }
+    .results .meta, .results .export { justify-content: center; }
+    .results .export-buttons { justify-content: center; }
+    .results .export-row { justify-content: center; }
+    .controls { display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.9rem; min-width: 0; }
+    .control-row { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+    .control-row label { color: var(--muted); width: 6.2rem; flex-shrink: 0; }
+    .control-row select {
       background: #0b1220; color: var(--text);
       border: 1px solid var(--border); border-radius: 8px;
       padding: 0.4rem 0.6rem; font-size: 0.9rem;
+      flex: 1; min-width: 0; max-width: 100%;
     }
-    .controls .check { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
-    .hint { color: var(--muted); font-size: 0.8rem; margin: 0.5rem 0 0; }
+    .hint {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin: 0.5rem 0 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
     .result-block + .result-block { margin-top: 1rem; }
     .result-title { font-size: 0.8rem; color: var(--accent-hover); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.35rem; }
     .meta { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.75rem; color: var(--muted); font-size: 0.9rem; }
@@ -127,43 +152,51 @@
   <div class="container">
     <h1>Распознавание русского текста</h1>
     <p class="subtitle">Загрузите изображение или PDF с рукописным или печатным русским текстом. Движок распознавания и коррекцию можно выбрать ниже.</p>
-    <div class="grid">
+    <div class="stack">
       <div class="panel">
-        <div class="dropzone" id="dropzone">
-          <p><strong>Перетащите изображение или PDF сюда</strong></p>
-          <p>или нажмите, чтобы выбрать файл</p>
-          <input type="file" id="fileInput" accept="image/*,application/pdf" hidden />
-          <img id="preview" alt="Предпросмотр" />
-          <p id="fileName" style="display:none; color:var(--text); margin-top:1rem;"></p>
-        </div>
-        <div class="controls">
-          <label for="engine">Движок</label>
-          <select id="engine">
-            <option value="chandra">Chandra OCR 2 (VLM, требует GPU)</option>
-            <option value="trocr">Рукописный (TrOCR, CPU)</option>
-            <option value="tesseract">Печатный (Tesseract, быстро)</option>
-          </select>
-          <label for="corrector">Коррекция</label>
-          <select id="corrector">
-            <option value="context">Контекстная (SAGE 1.7B)</option>
-            <option value="none">Нет</option>
-            <option value="spell">Словарная</option>
-          </select>
-        </div>
-        <p class="hint" id="engineHint">Chandra OCR 2 (~5B): препроцесс и полосы по строкам. Корректор SAGE 1.7B чинит орфографию/OCR после выгрузки Chandra. TrOCR — CPU.</p>
-        <button id="recognizeBtn" disabled>Распознать</button>
+        <div class="upload-row">
+          <div class="dropzone" id="dropzone">
+            <p><strong>Перетащите изображение или PDF сюда</strong></p>
+            <p>или нажмите, чтобы выбрать файл</p>
+            <input type="file" id="fileInput" accept="image/*,application/pdf" hidden />
+            <img id="preview" alt="Предпросмотр" />
+            <p id="fileName" style="display:none; color:var(--text); margin-top:1rem;"></p>
+          </div>
+          <div class="upload-side">
+            <div class="controls">
+              <div class="control-row">
+                <label for="engine">Движок</label>
+                <select id="engine">
+                  <option value="chandra">Chandra OCR 2 (GPU)</option>
+                  <option value="trocr">TrOCR (CPU)</option>
+                  <option value="tesseract">Tesseract</option>
+                </select>
+              </div>
+              <div class="control-row">
+                <label for="corrector">Коррекция</label>
+                <select id="corrector">
+                  <option value="context">Контекстная (SAGE 1.7B)</option>
+                  <option value="none">Нет</option>
+                  <option value="spell">Словарная</option>
+                </select>
+              </div>
+            </div>
+            <p class="hint" id="engineHint">Chandra: полосы по строкам. SAGE правит OCR после выгрузки модели.</p>
+            <button id="recognizeBtn" disabled>Распознать</button>
 
-        <div class="progress-wrap" id="progressWrap">
-          <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
-          <div class="progress-info">
-            <span id="progressPhase">—</span>
-            <span id="progressStats">0% · 0.0 c</span>
+            <div class="progress-wrap" id="progressWrap">
+              <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+              <div class="progress-info">
+                <span id="progressPhase">—</span>
+                <span id="progressStats">0% · 0.0 c</span>
+              </div>
+            </div>
+
+            <div class="error" id="error"></div>
           </div>
         </div>
-
-        <div class="error" id="error"></div>
       </div>
-      <div class="panel">
+      <div class="panel results">
         <div class="result-block">
           <div class="result-title">Распознанный текст</div>
           <div class="result-text" id="resultText">Здесь появится распознанный текст…</div>
