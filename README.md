@@ -1,70 +1,71 @@
 # handwriting_recognition
 
-Приложение для перевода русского рукописного/печатного текста в электронный формат.
+Приложение для перевода русской рукописи и печатного текста (сканы, фото, PDF) в чистый электронный текст.
 
-Два движка распознавания:
+Три движка:
 
-- **Tesseract OCR** — быстрый, лёгкий (без `torch`), хорош для **печатного/аккуратного** текста.
-  Для курсивного рукописного текста практически бесполезен.
-- **TrOCR (рукописный)** — нейросетевая модель `kazars24/trocr-base-handwritten-ru`,
-  дообученная на русском рукописном тексте. Распознаёт **курсив**. Тяжелее и медленнее,
-  требует CPU-`torch` + `transformers`; модель (~1.3 ГБ) скачивается при первом запуске.
-- **Chandra OCR 2** (`datalab-to/chandra-ocr-2`) — page-level документный **VLM ~5B**
-  (Qwen3.5-VL) от Datalab: читает страницу целиком (без сегментации), отлично работает
-  с рукописью/таблицами/формами, 90+ языков, топит бенчмарк olmOCR. **Требует CUDA-GPU
-  ≥16 ГБ VRAM** (веса ~10–12 ГБ) — на CPU не запускается.
+- **Tesseract OCR** — быстрый, без `torch`. Годится для **печатного** текста. Курсив почти не читает.
+- **TrOCR** (`kazars24/trocr-base-handwritten-ru`) — нейросеть по словам (~1.3 ГБ). Читает курсив на CPU, но слабее Chandra на целой странице.
+- **Chandra OCR 2** (`datalab-to/chandra-ocr-2`) — page-level VLM ~5B (Qwen3.5-VL). Лучший вариант для тетрадей, бланков и PDF. На **RTX 12 ГБ** работает, если корректор грузится **после** выгрузки Chandra, а не вместе с ней.
 
-Ключевая деталь TrOCR: модель ужимает вход до 384×384, поэтому подавать строку целиком
-нельзя — текст разрушается. Пайплайн сегментирует страницу на **строки**, затем на **слова**
-(OpenCV: коррекция освещения, бинаризация, проекционные профили) и распознаёт по словам.
+TrOCR ужимает вход до 384×384: страница режется на строки и слова. Chandra читает полосы страницы целиком.
 
 ## Стек
 
-- **FastAPI** — REST API и веб-интерфейс
-- **Tesseract OCR** (`tesseract-ocr`, `tesseract-ocr-rus`) + **pytesseract** — печатный текст
-- **TrOCR** (`transformers`, CPU-`torch`) — рукописный текст
-- **OpenCV / Pillow / NumPy / SciPy** — предобработка и сегментация
-- **Коррекция текста** (опционально):
-  - **SAGE 1.7B** (`ai-forever/sage-v1.1.0`, токенизатор `ai-forever/FRED-T5-1.7B`) —
-    контекстный корректор орфографии/грамматики/пунктуации (~7 ГБ). Репозитория
-    `sage-fredt5-1.7b` на Hugging Face нет: официальный чекпойнт 1.7B — `sage-v1.1.0`.
-  - **pyspellchecker** — консервативная словарная проверка (без контекста).
+- **FastAPI** — REST и веб-интерфейс
+- **Tesseract** + **pytesseract** — печать
+- **TrOCR** (`transformers`, CPU-`torch`) — рукопись без GPU
+- **Chandra OCR 2** — рукопись/бланки на CUDA
+- **OpenCV / Pillow / NumPy** — предобработка страницы (выравнивание, линии тетради, красные пометки)
+- **PyMuPDF** — PDF → изображения, 300 DPI
+- **Коррекция** (после распознавания):
+  - **SAGE 1.7B** (`ai-forever/sage-v1.1.0` + токенизатор `FRED-T5-1.7B`) — seq2seq, орфография и типичные OCR-опечатки. На 12 ГБ: dense bf16/fp32, ~1.74B весов.
+  - **cursivefix** — словарные замены курсивных крокозябр (`лацубу` → `чащобу`), если слово не из OpenCorpora и есть единственный дешёвый lookalike.
+  - **pyspellchecker** — лёгкая словарная проверка без контекста (`corrector=spell`).
+  - **T-lite 8B** — опция `CORRECTOR_MODEL=t-tech/T-lite-it-2.1` (4-bit на ≤16 ГБ). Не держит 8B в bf16 на 12 ГБ.
 
-Chandra (~5B) и SAGE 1.7B **не держатся в VRAM одновременно**: загрузка одной
-модели выгружает другую (`app/models.py`). На RTX 4070 Super 12 ГБ они идут
-строго по очереди: сначала страница Chandra, затем корректор SAGE.
+Chandra и корректор **не живут в VRAM одновременно** (`app/models.py`). Типичный прогон на 4070 Super 12 ГБ: Chandra → выгрузка → SAGE.
 
-Старый кэш `sage-fredt5-large` можно удалить:
+Неиспользуемый кэш старых чекпойнтов:
 
 ```bash
 python scripts/cleanup_old_hf_cache.py
 ```
 
-### Выбор моделей (переменные окружения)
+### Пайплайн Chandra + SAGE
+
+1. Скан/фото/PDF → RGB, при необходимости enhance (deskew, линии, CLAHE).
+2. Страница режется на **3 горизонтальные полосы** с перекрытием (`CHANDRA_STRIPS`), чтобы буквы были крупнее.
+3. Chandra пишет HTML с лейаутом; `html_to_text` снимает теги, обрезанный `data-bbox`, петли декодера и повтор хвоста полосы.
+4. `cursivefix` правит несловарные токены вроде `кинуза`.
+5. SAGE 1.7B правит опечатки по предложениям, абзацы сохраняются. Даты и прочерки бланка (`« 08 »`, `_____`) SAGE не трогает.
+6. В UI два поля: распознанный текст и «После коррекции».
+
+Лимит генерации Chandra по умолчанию **1536 токенов на полосу** (2048 без полос). Раньше 512 обрывал бланки посередине HTML.
+
+### Переменные окружения
 
 | Переменная | По умолчанию | Назначение |
 | --- | --- | --- |
-| `HTR_MODEL` | `kazars24/trocr-base-handwritten-ru` | Рукописная модель TrOCR |
-| `HTR_BEAMS` | `4` | Ширина beam search (1 = greedy, быстрее и чуть хуже) |
-| `SAGE_MODEL` | `ai-forever/sage-v1.1.0` | Контекстный корректор 1.7B (`…-distilled-95m` — легче/быстрее) |
-| `SAGE_TOKENIZER` | `ai-forever/FRED-T5-1.7B` для `sage-v1.1.0` | Токенизатор SAGE (для distilled/large — тот же репозиторий, что и модель) |
-
-Приоритет по умолчанию — **качество**: SAGE 1.7B (~7 ГБ) и beam search.
-На CPU полная страница распознаётся заметно дольше; для скорости выставьте
-`HTR_BEAMS=1` и `SAGE_MODEL=ai-forever/sage-fredt5-distilled-95m`.
+| `HTR_MODEL` | `kazars24/trocr-base-handwritten-ru` | TrOCR |
+| `HTR_BEAMS` | `4` | Beam search TrOCR (`1` = greedy) |
+| `CORRECTOR_MODEL` | `ai-forever/sage-v1.1.0` | Контекстный корректор (`SAGE_MODEL` — синоним) |
+| `SAGE_TOKENIZER` | `ai-forever/FRED-T5-1.7B` | Токенизатор SAGE 1.7B |
+| `SAGE_BEAMS` | `1` для 1.7B, иначе `4` | Beam SAGE; `1` на 12 ГБ, чтобы generate не зависал |
+| `CORRECTOR_QUANT` | `auto` | Для T-lite: `4bit` на GPU ≤16 ГБ; SAGE 1.7B dense |
+| `CHANDRA_PROMPT` | `ocr` | `ocr` — русский рукописный промпт; `ocr_layout` — markdown с лейаутом |
+| `CHANDRA_ENHANCE` | `1` | Препроцесс страницы |
+| `CHANDRA_STRIPS` | `3` | Число горизонтальных полос (`1` = вся страница) |
+| `CHANDRA_REFINE` | `0` | Второй проход Chandra; часто выдумывает «литературный» заголовок |
+| `CHANDRA_MAX_TOKENS` | `1536` / `2048` | Потолок токенов на полосу / страницу |
 
 ## Форматы ввода
 
-Изображения (PNG/JPEG/BMP/TIFF/WebP) и **PDF** (постранично, через PyMuPDF —
-без внешних зависимостей). Для PDF каждая страница рендерится в изображение и
-распознаётся выбранным движком; результаты страниц объединяются.
+PNG/JPEG/BMP/TIFF/WebP и **PDF** (каждая страница — отдельное изображение). Для МФУ (Lexmark и аналоги) лучше **фото/цвет, 300 DPI, без вырезания фона**. ЧБ «текст» убивает карандаш и тонкий стержень.
 
 ## Вывод и экспорт
 
-Результат всегда возвращается **чистым текстом**: layout-HTML от Chandra
-конвертируется в абзацы (по блокам/дивам), `<br/>` → перенос строки, теги и
-`data-bbox` убираются. Готовый текст можно скачать через `GET /api/export/{job_id}`
-или кнопками в UI в форматах: **TXT, Markdown, Word (docx), Excel (xlsx), PDF**.
+Результат — **чистый текст**: HTML Chandra → абзацы, `<br/>` → перевод строки, теги и `data-bbox` снимаются (в том числе оборванные теги, если модель упёрлась в лимит токенов). Скачать: `GET /api/export/{job_id}` или кнопки UI — **TXT, Markdown, Word, Excel, PDF**. Параметр `which=text|corrected`.
 
 ## Установка
 
@@ -72,60 +73,40 @@ python scripts/cleanup_old_hf_cache.py
 bash scripts/install.sh
 ```
 
-Скрипт идемпотентный: ставит системный Tesseract с русским языком (через `apt`),
-создаёт виртуальное окружение `.venv` и устанавливает Python-зависимости.
+Идемпотентно: Tesseract с русским языком, `.venv`, лёгкие зависимости.
 
-> Если вы за корпоративным прокси с перехватом SSL, добавьте к pip-командам
-> `--trusted-host pypi.org --trusted-host files.pythonhosted.org`.
+> За корпоративным прокси с перехватом SSL добавьте к pip `--trusted-host pypi.org --trusted-host files.pythonhosted.org`.
 
-### Рукописный движок (TrOCR) — опционально
-
-Тяжёлые зависимости ставятся отдельно (CPU-`torch`, без CUDA):
+### TrOCR (опционально, CPU)
 
 ```bash
 .venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
 .venv/bin/pip install -r requirements-trocr.txt
 ```
 
-Модели скачаются автоматически при первом распознавании: рукописная
-`kazars24/trocr-base-handwritten-ru` (~1.3 ГБ) и корректор `sage-v1.1.0`
-(~7 ГБ; токенизатор FRED-T5-1.7B). На CPU распознавание страницы с beam search занимает единицы–десятки
-минут; ускорить можно через `HTR_BEAMS=1` и лёгкий `SAGE_MODEL` (см. таблицу выше).
-
-### Chandra OCR 2 (`engine=chandra`) — лучшее качество, нужен GPU
-
-Page-level VLM ~5B. Локальный запуск требует **CUDA-GPU ≥16 ГБ VRAM**:
+### Chandra OCR 2 (рекомендуется, CUDA)
 
 ```bash
 .venv/bin/pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
 .venv/bin/pip install -r requirements-chandra.txt
 ```
 
-Модель `datalab-to/chandra-ocr-2` (~10–12 ГБ) скачается при первом запуске.
-На 12 ГБ VRAM держите Chandra и SAGE **по очереди** (так и работает пайплайн).
-На CPU-хосте движок сразу вернёт понятную ошибку (загрузка 10 ГБ не запускается).
-Без своего GPU можно использовать хостируемый Datalab API/playground: <https://datalab.to>.
-Режим промпта — `CHANDRA_PROMPT` (`ocr` — текст, по умолчанию; `ocr_layout` — markdown с лейаутом).
+`datalab-to/chandra-ocr-2` (~10–12 ГБ) и SAGE 1.7B (~7 ГБ) качаются при первом прогоне. На CPU Chandra сразу возвращает ошибку, без загрузки весов. Без своего GPU: [Datalab](https://datalab.to).
 
 ### Windows
 
-`scripts/install.sh` — только для Linux (внутри `apt`/`sudo`) и на нативном Windows
-не запустится (`bash` уйдёт в WSL). Варианты:
+`scripts/install.sh` рассчитан на Linux. Нативно:
 
-- **WSL2 + Ubuntu (рекомендуется для GPU/ML):** установите WSL2 с Ubuntu, дальше все
-  Linux-инструкции работают как есть, CUDA пробрасывается в WSL2.
-- **Нативный Windows (PowerShell):**
-  ```powershell
-  .\scripts\install.ps1
-  # опционально: TrOCR / Chandra
-  .\.venv\Scripts\python -m pip install -r requirements-trocr.txt
-  .\.venv\Scripts\python -m pip install -r requirements-chandra.txt   # нужен GPU
-  .\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-  ```
-  Tesseract на Windows ставится отдельно (`winget install --id UB-Mannheim.TesseractOCR`,
-  отметьте язык `rus`). Если `tesseract.exe` не в PATH — задайте
-  `$env:TESSERACT_CMD='C:\Program Files\Tesseract-OCR\tesseract.exe'`.
-  Для движка **Chandra** Tesseract не нужен вовсе.
+```powershell
+.\scripts\install.ps1
+.\.venv\Scripts\python -m pip install -r requirements-trocr.txt
+.\.venv\Scripts\python -m pip install -r requirements-chandra.txt   # GPU
+.\.venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8080
+```
+
+Tesseract: `winget install --id UB-Mannheim.TesseractOCR` (язык `rus`). Если нет в PATH: `$env:TESSERACT_CMD='C:\Program Files\Tesseract-OCR\tesseract.exe'`. Для Chandra Tesseract не нужен.
+
+Запускайте uvicorn из каталога, где лежит `app\` (не из вложенного git-клона, если их два). В логе должно быть `app loaded from ...\app`.
 
 ## Запуск
 
@@ -133,49 +114,40 @@ Page-level VLM ~5B. Локальный запуск требует **CUDA-GPU �
 .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Откройте <http://localhost:8000> — загрузите изображение и получите распознанный текст.
+Откройте <http://localhost:8000> (на Windows часто <http://127.0.0.1:8080>). Движок — Chandra, коррекция — контекстная (SAGE).
 
 ## API
 
-| Метод | Путь              | Описание                                            |
-| ----- | ----------------- | --------------------------------------------------- |
-| GET   | `/`               | Веб-интерфейс загрузки                              |
-| GET   | `/api/health`     | Статус + версия Tesseract и список языков           |
-| POST  | `/api/recognize`  | `multipart/form-data` с полем `file` → JSON с текстом |
+| Метод | Путь | Описание |
+| ----- | ---- | -------- |
+| GET | `/` | Веб-интерфейс |
+| GET | `/api/health` | Статус, Tesseract, id корректора |
+| POST | `/api/recognize` | `multipart/form-data`, поле `file` → `job_id` |
+| GET | `/api/progress/{job_id}` | Прогресс и готовый текст |
+| GET | `/api/export/{job_id}` | Скачать txt/md/docx/xlsx/pdf |
+| GET | `/api/metrics` | CPU / RAM / GPU |
 
-Параметры `/api/recognize` (query):
+Параметры `/api/recognize`:
 
-- `engine` — `tesseract` (по умолчанию), `trocr` (рукописный, CPU) или `chandra`
-  (Chandra OCR 2, page-level VLM, требует GPU).
-- `corrector` — коррекция текста, возвращается в поле `text_corrected`:
-  - `none` (по умолчанию) — без коррекции;
-  - `spell` — консервативная словарная проверка (без контекста);
-  - `context` — контекстный корректор SAGE (орфография/грамматика/пунктуация).
-
-Примеры:
+- `engine` — `tesseract` \| `trocr` \| `chandra`
+- `corrector` — `none` \| `spell` \| `context` (SAGE 1.7B)
 
 ```bash
-# печатный текст (Tesseract)
 python scripts/make_sample.py --text "Привет, мир!" --out sample.png
-curl -s -F "file=@sample.png" "http://localhost:8000/api/recognize?engine=tesseract"
+curl -s -F "file=@sample.png" "http://127.0.0.1:8080/api/recognize?engine=tesseract"
 
-# рукописный текст (TrOCR) + контекстная коррекция (SAGE)
-curl -s -F "file=@page.jpg" "http://localhost:8000/api/recognize?engine=trocr&corrector=context"
+curl -s -F "file=@page.pdf" "http://127.0.0.1:8080/api/recognize?engine=chandra&corrector=context"
 ```
 
-## Ограничения и планы
+Ответ сразу отдаёт `job_id`; текст и `text_corrected` приходят через `/api/progress/{job_id}`.
 
-- **Печатный Tesseract** не читает курсив — для рукописи используйте `engine=trocr`.
-- **TrOCR** даёт ~75–85% верных слов на аккуратном курсиве; качество падает при плохой
-  сегментации (слитные строки, наклон, шум) и на нижних плотных абзацах.
-- **Контекстная коррекция (SAGE)** исправляет орфографию/грамматику/пунктуацию с учётом
-  контекста (например «исли изти» → «Если идти», «зарастающий полены» → «зарастающие …
-  поляны») и не ломает верные слова. Не всесильна: если OCR-ошибка слишком далека от
-  правильного слова, модель может её не восстановить.
-- **Сегментация** нижних плотных абзацев улучшена: слитые строки разбиваются по
-  внутренним пикам чернил, одиночные строки (заголовок) не режутся.
-- **Словарная проверка** (`corrector=spell`) без контекста и иногда искажает верные слова
-  («лесом» → «летом») — оставлена как лёгкая альтернатива, по умолчанию не используется.
+## Ограничения
+
+- Tesseract не читает школьный курсив — берите Chandra.
+- Chandra путает похожие буквы (`ч/л`, `щ/ц`) и целые слова (`Дом`/`Ночь`). Это не словарь модели.
+- SAGE чинит опечатки (`стиках` → `струйках`), не «угадывает» другое словарное слово и не должна переписывать сочинение. Крокозябры вроде `лацубу` закрывает cursivefix, не SAGE.
+- Второй проход Chandra (`CHANDRA_REFINE=1`) часто литературно выдумывает заголовок — по умолчанию выключен.
+- 8B в bf16 на 12 ГБ не влезает; offload в RAM — это PCIe, не «ещё 32 ГБ видеопамяти».
 
 ## Тесты
 
@@ -183,29 +155,6 @@ curl -s -F "file=@page.jpg" "http://localhost:8000/api/recognize?engine=trocr&co
 .venv/bin/pytest -q
 ```
 
-Тесты генерируют изображения с русским текстом и проверяют, что Tesseract
-корректно распознаёт их через OCR-модуль и через HTTP-эндпоинт.
+CI/локально корректор в тестах — маленький `sage-fredt5-distilled-95m` (`conftest.py`), не 1.7B.
+
 <img width="1851" height="882" alt="image" src="https://github.com/user-attachments/assets/cb27370e-0344-4f35-b07c-cd49865fcdae" />
-Дьм @
-Пера» ила - ма с
-ааа фа прот рем деи те нм
-о феромонами отетаьа Ме ори белы $
-Клину | ока Поми  АРОНИААИ пролили
-чечня боле, олотми кори овал и
-024 поли еклоимАонеть , 8 фулл Лав АА о 7. уча ‘77
-Токим ДиеыАЯ . Проминь } кАкААА си уве Слинг.
-рум ранее Фен фри в ит
-мак и Кери > кие и
-И. 6. блесья бо дса он |
-рав в р о ление м РА ее ё Сяселктли 9е
-бен . ети { и
-м повлек "м мрекимии отеле д
-и аа Ри рр оба мы
-м а отт ох Наррань
-раны отл ых Серена еее р орт
-Коче # о рр “ Руччи # <
-И Сич мени ль ре лдарнь
-ии Илия. чл в боры
-и ок
-Соб
-/ ея,

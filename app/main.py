@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import re
 import threading
 import time
 from pathlib import Path
+
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -67,6 +70,7 @@ def health() -> dict:
         "status": "ok",
         **tesseract_info(),
         "app_path": str(BASE_DIR),
+        "corrector_model": sage_model,
         "sage_model": sage_model,
         "sage_tokenizer": sage_tokenizer,
     }
@@ -78,7 +82,10 @@ def _log_where_we_loaded() -> None:
 
     sage_model, sage_tokenizer = _model_ids()
     print(f"[handwriting] app loaded from {BASE_DIR}", flush=True)
-    print(f"[handwriting] SAGE_MODEL={sage_model}  SAGE_TOKENIZER={sage_tokenizer}", flush=True)
+    print(
+        f"[handwriting] CORRECTOR_MODEL={sage_model}  TOKENIZER={sage_tokenizer}",
+        flush=True,
+    )
 
 
 CORRECTORS = {"none", "spell", "context"}
@@ -163,14 +170,23 @@ def _run_job(job_id: str, data: bytes, content_type: str, lang: str, engine: str
                     from app import models
                     from app.corrector import correct_text
 
-                    # Chandra ~5B and SAGE 1.7B cannot share a 12 GB card.
-                    # Drop Chandra before SAGE loads so they never coexist in VRAM.
+                    # Chandra ~5B and SAGE 1.7B share the card sequentially.
                     models.unload("chandra")
+
+                    def corr_progress(fraction, phase="correct", **extra):
+                        n = extra.get("token_count")
+                        jobs.update(
+                            job_id,
+                            phase=f"correct · {n}" if n else phase,
+                            progress=min(0.999, 0.99 + 0.009 * float(fraction or 0)),
+                        )
+
+                    corrected = correct_text(combined, progress=corr_progress)
                 else:
                     from app.postprocess import correct_text
-                corrected = correct_text(combined)
+                    corrected = correct_text(combined)
             except Exception as exc:  # noqa: BLE001 - correction is best-effort
-                logging.getLogger("app").exception("SAGE/corrector failed")
+                logging.getLogger("app").exception("context corrector failed")
                 print(f"[handwriting] corrector failed: {exc}", flush=True)
                 jobs.update(job_id, corrector_error=str(exc))
         correct_ms = int((time.time() - correct_start) * 1000)
@@ -204,7 +220,7 @@ async def recognize(
 
     ``engine``: ``tesseract`` (printed, CPU), ``trocr`` (handwriting, CPU) or
     ``chandra`` (Chandra OCR 2, page-level VLM, needs GPU).
-    ``corrector``: ``none`` | ``spell`` (dictionary) | ``context`` (SAGE).
+    ``corrector``: ``none`` | ``spell`` (dictionary) | ``context`` (SAGE 1.7B).
     """
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=415, detail=f"Unsupported content type: {file.content_type}")

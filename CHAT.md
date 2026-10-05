@@ -31,9 +31,9 @@
 
 ## Статус проекта
 
-- **Стек:** FastAPI + Tesseract OCR (`tesseract-ocr-rus`) + OpenCV/Pillow. Без `torch`/CUDA.
-- **Запуск:** `bash scripts/install.sh` → `.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000`.
-- **Тесты:** `.venv/bin/pytest -q` (7 тестов).
+- **Стек:** FastAPI + Chandra OCR 2 (GPU) / TrOCR / Tesseract + SAGE 1.7B по очереди в VRAM.
+- **Запуск (Windows):** из каталога с `app\`: `.venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8080`.
+- **Тесты:** `.venv/bin/pytest -q`.
 - Подробности — в [`README.md`](README.md).
 
 ## Журнал
@@ -48,6 +48,10 @@
   (репозитория `sage-fredt5-1.7b` на HF нет). Chandra и SAGE не делят VRAM:
   `app/models.py` выгружает одну перед загрузкой другой. Старый `sage-fredt5-large`
   чистится скриптом `python scripts/cleanup_old_hf_cache.py`.
+- ✅ Контекстный корректор по умолчанию: `ai-forever/sage-v1.1.0` (1.7B, FRED-T5).
+  T-lite 8B опционален через `CORRECTOR_MODEL`. Chandra и SAGE по очереди в VRAM.
+- ✅ Chandra: enhance + 3 полосы, лимит 1536 токенов (бланки больше не режутся на 512).
+  SAGE: shared-эмбеддинги, не ломает даты бланка. cursivefix для `лацубу`/`кинуза`.
 
 ---
 
@@ -117,6 +121,10 @@ curl -s -F "file=@page.jpg" \
 ## Новые сообщения
 
 <!-- Пишите ниже. Новые сообщения удобно добавлять сверху этого раздела. -->
+
+**T-lite-it-2.1 вместо SAGE.** Дефолт `corrector=context` — `t-tech/T-lite-it-2.1`
+(8B, 4-bit на 12 ГБ). Chandra выгружается перед коррекцией. Первый запуск качает
+~16 ГБ весов. `pip install -r requirements-trocr.txt` (bitsandbytes, accelerate).
 
 **Почему не качались 7 ГБ SAGE 1.7B.** Uvicorn запускался из
 `C:\hand\handwriting_recognition` (родитель), а правки 1.7B лежали во вложенном

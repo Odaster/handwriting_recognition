@@ -10,7 +10,7 @@ _MISSING = (
 )
 
 
-def pdf_to_images(data: bytes, dpi: int = 200, max_pages: int = 50) -> list[Image.Image]:
+def pdf_to_images(data: bytes, dpi: int = 300, max_pages: int = 50) -> list[Image.Image]:
     """Render each PDF page to a PIL image at the given DPI."""
     try:
         import pymupdf as fitz
