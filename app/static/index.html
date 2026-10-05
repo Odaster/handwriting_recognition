@@ -150,7 +150,7 @@
             <option value="spell">Словарная</option>
           </select>
         </div>
-        <p class="hint" id="engineHint">Chandra OCR 2 — page-level VLM (~5B), лучшее качество без сегментации. На 12 ГБ VRAM Chandra и SAGE 1.7B работают по очереди (не одновременно). Рукописный (TrOCR) работает на CPU.</p>
+        <p class="hint" id="engineHint">Chandra OCR 2 (~5B): препроцесс и полосы по строкам. Корректор SAGE 1.7B чинит орфографию/OCR после выгрузки Chandra. TrOCR — CPU.</p>
         <button id="recognizeBtn" disabled>Распознать</button>
 
         <div class="progress-wrap" id="progressWrap">

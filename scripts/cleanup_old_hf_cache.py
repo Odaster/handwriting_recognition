@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Remove superseded Hugging Face model caches from disk.
 
-The app now defaults to SAGE 1.7B (``ai-forever/sage-v1.1.0`` + tokenizer
-``ai-forever/FRED-T5-1.7B``). The previous default ``sage-fredt5-large``
-(~3.3 GB) is unused and can be deleted.
+The app now defaults to SAGE 1.7B (sage-v1.1.0). Unused older SAGE-large
+caches can be deleted. T-lite is optional — not removed here.
 
-Keeps distilled-95m (tests) and the 1.7B checkpoint/tokenizer.
+Keeps distilled-95m (tests).
 
 Usage (from repo root):
 
@@ -28,6 +27,7 @@ KEEP_HINTS = (
     "models--ai-forever--sage-v1.1.0",
     "models--ai-forever--FRED-T5-1.7B",
     "models--ai-forever--sage-fredt5-distilled-95m",
+    "models--t-tech--T-lite-it-2.1",
 )
 
 
@@ -97,7 +97,7 @@ def main() -> int:
                 found.append(target)
 
     if not found:
-        print("Старый кэш sage-fredt5-large не найден — удалять нечего.")
+        print("Старый кэш SAGE не найден — удалять нечего.")
         print("Проверенные каталоги:")
         for hub in _hub_dirs():
             print(f"  {hub}  ({'есть' if hub.is_dir() else 'нет'})")

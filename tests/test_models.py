@@ -30,9 +30,9 @@ def test_exclusive_keys_evict_each_other():
     assert models.cached_keys() == {"chandra"}
     assert chandra.device == "cuda"
 
-    sage = models.load("sage", lambda: _Dummy("sage"))
+    sage = models.load("corrector", lambda: _Dummy("sage"))
     assert sage.name == "sage"
-    assert models.cached_keys() == {"sage"}
+    assert models.cached_keys() == {"corrector"}
     # The evicted Chandra dummy was moved off GPU before drop.
     assert chandra.device == "cpu"
 
@@ -41,8 +41,20 @@ def test_exclusive_keys_evict_each_other():
     assert sage.device == "cpu"
 
 
+def test_nested_wrapper_evicted():
+    inner = _Dummy("inner")
+
+    class Wrap:
+        def __init__(self, model):
+            self.model = model
+
+    models.load("chandra", lambda: Wrap(inner))
+    models.unload("chandra")
+    assert inner.device == "cpu"
+
+
 def test_reload_reuses_cached_object():
-    first = models.load("sage", lambda: _Dummy("once"))
-    second = models.load("sage", lambda: _Dummy("twice"))
+    first = models.load("corrector", lambda: _Dummy("once"))
+    second = models.load("corrector", lambda: _Dummy("twice"))
     assert first is second
     assert first.name == "once"
