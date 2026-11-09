@@ -1,98 +1,72 @@
 # handwriting_recognition
 
-Сервис: скан, фото или PDF с русским текстом → UTF-8. FastAPI, страница на `/`, распознавание идёт фоновой задачей.
+Сервис переводит скан, фото или PDF с русским текстом в обычный текст. Сервер на FastAPI, страница открывается на `/`.
 
-Руководство ниже ставит проект с чистой машины. Шаги идут по порядку: не перескакивайте. Каталог, из которого всё запускается, — тот, где лежат папки `app` и `scripts` и файлы `requirements*.txt`. Если после клонирования вы видите `handwriting_recognition\handwriting_recognition\app`, зайдите во внутренний каталог. Виртуальное окружение `.venv` создаётся именно там. Uvicorn тоже запускается оттуда, иначе импорт `app` не найдётся.
+Перед установкой:
 
-Нужен Python 3.11, 64-bit. Подойдут 3.10 и 3.12. Python 3.13 и новее не ставьте: колёса PyTorch для них не гарантированы, и установка оборвётся уже на torch.
+- Python 3.11, 64 бит. 3.10 и 3.12 тоже подойдут. 3.13 и новее не ставьте.
+- На базовую установку хватит примерно 8 ГБ. Chandra и SAGE при первом запуске скачают ещё около 10–12 ГБ и 7 ГБ.
+- Команды выполняются в каталоге, где лежат папка `app` и файл `requirements.txt`. Сервер запускается оттуда же.
+- Движок один на окружение: Tesseract, TrOCR или Chandra. CPU-сборку torch и CUDA-сборку вместе не ставьте, вторая затрёт первую.
 
-Свободное место: около 8 ГБ на базовое окружение. Chandra и корректор SAGE качают веса при первом запросе (Chandra около 10–12 ГБ, SAGE около 7 ГБ). На этот вариант заложите 30 ГБ.
+## Установка на Windows
 
-## Что ставить по задаче
+Дальше PowerShell. В cmd эти команды не сработают.
 
-Базовые пакеты (`requirements.txt`) поднимают сайт, PDF и движок Tesseract. Нейросетей в них нет.
-
-Дальше одна ветка, не обе сразу. CPU-torch и CUDA-torch в одном окружении затирают друг друга.
-
-| Задача | Дополнительно |
-| --- | --- |
-| Печатный текст, без видеокарты | Tesseract с языком `rus` |
-| Рукопись на CPU (TrOCR) | torch с индекса CPU, затем `requirements-trocr.txt` |
-| Страница / бланк / тетрадь (Chandra) и правка SAGE | NVIDIA-драйвер, torch с индекса CUDA 12.1, `requirements-chandra.txt`, затем пакеты SAGE из `requirements-trocr.txt`, и снова CUDA-torch |
-
-Chandra без рабочей CUDA веса не грузит. На 12 ГБ видеопамяти Chandra и SAGE занимают карту по очереди, не вместе.
-
-`scripts/install.ps1` и `scripts/install.sh` ставят только базу (venv + `requirements-dev.txt`) и Tesseract на Linux. Chandra, TrOCR и политику PowerShell они не делают. Ниже полный путь вручную. Скрипт можно запустить только после Python и, на Windows, после политики — и только вместо шагов с venv и базовым `pip`.
-
-## Windows
-
-Команды — в Windows PowerShell. «Терминал» в Cursor и PowerShell 7 тоже подходят. Командная строка `cmd` эти шаги не повторяет: политика и `Activate.ps1` там не действуют.
-
-1. Откройте PowerShell. Проверьте политику:
-
-   ```powershell
-   Get-ExecutionPolicy -List
-   ```
-
-   Смотрите строку `CurrentUser`. Если там `Restricted` или `Undefined`, локальные скрипты запрещены. Без смены политики не запустится ни `.\scripts\install.ps1`, ни активация окружения `.\.venv\Scripts\Activate.ps1`. Создание `.venv` командой `py -3.11 -m venv` само по себе скрипт не запускает, но следующий шаг — активация — упрётся в эту ошибку: `running scripts is disabled on this system`.
-
-2. Разрешите локальные скрипты только текущему пользователю. Права администратора для этой области не нужны:
+1. Разрешите запуск локальных скриптов. Без этого не откроется окружение: `Activate.ps1` ответит `running scripts is disabled on this system`. Администратор не нужен.
 
    ```powershell
    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
    ```
 
-   На вопрос ответьте `Y`. `RemoteSigned` пускает локальные неподписанные скрипты (активация venv и `install.ps1`) и требует подпись у скриптов, скачанных из интернета. Проверка:
+   На вопрос ответьте `Y`. Потом:
 
    ```powershell
    Get-ExecutionPolicy -Scope CurrentUser
    ```
 
-   Ожидается `RemoteSigned`. Если команда отвечает, что политику перекрывает групповая политика, её меняет администратор домена. Обход через `Bypass` в это руководство не входит: тогда подхватится любой скачанный скрипт.
+   Должно быть `RemoteSigned`.
 
-3. Установите Git для Windows с https://git-scm.com/download/win . В мастере оставьте настройки по умолчанию. Закройте PowerShell и откройте новое окно, затем:
+2. Поставьте Git: https://git-scm.com/download/win . В мастере оставьте как есть. Закройте PowerShell, откройте новое окно.
 
    ```powershell
    git --version
    ```
 
-4. Установите Python 3.11, 64-bit, с https://www.python.org/downloads/windows/ (не из Microsoft Store). В первом окне установщика включите **Add python.exe to PATH** и **Install pip**. Установка «для всех пользователей» удобнее, но тогда нужны права администратора. После установки снова закройте PowerShell и откройте новое окно: старое не видит обновлённый PATH.
+3. Поставьте Python 3.11 64-bit с https://www.python.org/downloads/windows/ . Из Microsoft Store не ставьте. В первом окне установщика отметьте `Add python.exe to PATH` и `Install pip`. Снова закройте PowerShell и откройте новое, старое окно новый PATH не видит.
 
-5. Отключите заглушки Store, иначе команда `python` открывает магазин и окружение создаётся не тем интерпретатором. Параметры → Приложения → Дополнительные параметры приложений → Псевдонимы выполнения приложений → выключите `python.exe` и `python3.exe`.
-
-   Проверка должна показать 3.11 и путь не из `WindowsApps`:
+4. Выключите подмену Python магазином: Параметры, Приложения, Дополнительные параметры приложений, Псевдонимы выполнения приложений, снять галки с `python.exe` и `python3.exe`.
 
    ```powershell
    py -3.11 --version
-   py -3.11 -c "import sys; print(sys.executable)"
    ```
 
-   Если `py` не найден, установщик Python не поставил лаунчер. Переустановите 3.11 с теми же галочками. Дальше везде используется `py -3.11`, а не голый `python`.
+   В ответе версия 3.11.
 
-6. Клонируйте репозиторий и зайдите в каталог с `app`:
+5. Склонируйте репозиторий и зайдите в него.
 
    ```powershell
    git clone https://github.com/Odaster/handwriting_recognition.git
    cd handwriting_recognition
    ```
 
-   Проверка: `dir app`, `dir requirements.txt` оба находятся. Если `app` нет — вы не в корне репозитория.
+   В этом каталоге должны быть папка `app` и файл `requirements.txt`. Если `app` лежит глубже, в `handwriting_recognition\handwriting_recognition`, зайдите туда.
 
-7. Создайте окружение этим же Python:
+6. Создайте окружение.
 
    ```powershell
    py -3.11 -m venv .venv
    ```
 
-   Рядом появится папка `.venv`. Повторно команду не запускайте, если папка уже есть: она перезапишет уже поставленные пакеты только если её удалить. Удалять имеет смысл, если окружение собрали не тем Python.
+   Появится папка `.venv`.
 
-8. Активируйте:
+7. Включите его.
 
    ```powershell
    .\.venv\Scripts\Activate.ps1
    ```
 
-   В начале строки появится `(.venv)`. Если PowerShell снова пишет, что скрипты запрещены, шаг 2 не применился в этом окне: откройте новое окно PowerShell, повторите проверку политики и активируйте снова. Команды ниже предполагают активное окружение. Проверка, что `python` теперь из `.venv`:
+   Слева в строке будет `(.venv)`.
 
    ```powershell
    python -c "import sys; print(sys.executable)"
@@ -100,143 +74,131 @@ Chandra без рабочей CUDA веса не грузит. На 12 ГБ ви
 
    Путь должен заканчиваться на `.venv\Scripts\python.exe`.
 
-9. Поставьте базу:
+8. Поставьте пакеты сайта.
 
    ```powershell
    python -m pip install --upgrade pip
    python -m pip install -r requirements.txt
    ```
 
-   Это веб-сервер, разбор PDF и клиент Tesseract. Torch здесь ещё нет.
+   Если pip ругается на сертификат или прокси, допишите к команде `--trusted-host pypi.org --trusted-host files.pythonhosted.org --trusted-host pypi.python.org`.
 
-   Если pip ругается на SSL или прокси, добавьте к команде `--trusted-host pypi.org --trusted-host files.pythonhosted.org --trusted-host pypi.python.org`.
+9. Поставьте один движок.
 
-10. Поставьте один движок.
+   Печать, без видеокарты:
 
-    Печать без видеокарты. Сначала Tesseract:
+   ```powershell
+   winget install --id UB-Mannheim.TesseractOCR
+   ```
 
-    ```powershell
-    winget install --id UB-Mannheim.TesseractOCR
-    ```
+   В установщике отметьте язык Russian. Новое окно PowerShell, снова включите `.venv`, затем:
 
-    В установщике отметьте языковые данные **Russian**. Закройте и откройте PowerShell, активируйте `.venv` снова и проверьте:
+   ```powershell
+   tesseract --list-langs
+   ```
 
-    ```powershell
-    tesseract --list-langs
-    ```
+   В списке должна быть строка `rus`. Если команда `tesseract` не находится:
 
-    В списке должна быть строка `rus`. Если команды `tesseract` нет, путь не попал в PATH. Перед запуском сервера задайте его в этом же окне (путь установщика по умолчанию):
+   ```powershell
+   $env:TESSERACT_CMD = "C:\Program Files\Tesseract-OCR\tesseract.exe"
+   ```
 
-    ```powershell
-    $env:TESSERACT_CMD = "C:\Program Files\Tesseract-OCR\tesseract.exe"
-    ```
+   Эта переменная живёт, пока открыто окно.
 
-    Переменная живёт до закрытия окна. Для постоянной настройки её задают в переменных среды пользователя.
+   Рукопись на процессоре (TrOCR):
 
-    Рукопись на CPU (TrOCR), без Chandra:
+   ```powershell
+   python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+   python -m pip install -r requirements-trocr.txt
+   ```
 
-    ```powershell
-    python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
-    python -m pip install -r requirements-trocr.txt
-    ```
+   Страница, бланк, тетрадь (Chandra и правка SAGE). Сначала драйвер:
 
-    Chandra и корректор SAGE. Сначала убедитесь, что драйвер NVIDIA живой:
+   ```powershell
+   nvidia-smi
+   ```
 
-    ```powershell
-    nvidia-smi
-    ```
+   В таблице должна быть ваша видеокарта. Затем пакеты. Последняя команда ставит CUDA-torch ещё раз: файл `requirements-trocr.txt` может подменить его другой сборкой.
 
-    Команда должна показать видеокарту. Если её нет, CUDA-torch встанет, но Chandra не запустится. Дальше именно индекс `cu121`, не обычный PyPI и не CPU-индекс:
+   ```powershell
+   python -m pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
+   python -m pip install -r requirements-chandra.txt
+   python -m pip install -r requirements-trocr.txt
+   python -m pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
+   python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+   ```
 
-    ```powershell
-    python -m pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
-    python -m pip install -r requirements-chandra.txt
-    python -m pip install -r requirements-trocr.txt
-    python -m pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
-    ```
+   В конце строки должно быть `True`. На 12 ГБ памяти карты Chandra и SAGE работают по очереди, не одновременно.
 
-    Третий `pip` ставит пакеты SAGE (transformers, sentencepiece, accelerate, bitsandbytes). Четвёртый возвращает CUDA-сборку torch: шаг с `requirements-trocr.txt` может подменить её на другую. Проверка:
-
-    ```powershell
-    python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
-    ```
-
-    Вторая часть должна быть `True`. Если `False`, в окружении не CUDA-сборка: повторите четвёртую команду и проверьте снова, сервер при этом не запускайте.
-
-11. Запуск из того же каталога, где лежит `app`, с уже активированным `.venv`:
+10. Запустите сервер из того же каталога, `.venv` уже включён.
 
     ```powershell
     python -m uvicorn app.main:app --host 127.0.0.1 --port 8080
     ```
 
-    Окно не закрывайте: это и есть сервер. Остановка — Ctrl+C. Повторный запуск после нового окна PowerShell: снова `cd` в этот каталог, снова `.\.venv\Scripts\Activate.ps1`, затем та же команда uvicorn. Само окружение заново создавать не нужно.
+    Страница: http://127.0.0.1:8080 . Проверка: http://127.0.0.1:8080/api/health , в ответе `"status": "ok"`. Окно не закрывайте. Остановка: Ctrl+C. После нового входа в систему снова зайдите в каталог и снова выполните `.\.venv\Scripts\Activate.ps1`.
 
-    Адрес в браузере: http://127.0.0.1:8080 . Проверка процесса: http://127.0.0.1:8080/api/health — в JSON поле `"status": "ok"` и путь `app_path` к папке `app` этого репозитория. Если страница не открывается, смотрите, не занят ли порт 8080 другим процессом, и что uvicorn пишет в этом окне, а не в старом.
+    Если сервер нужен другим компьютерам, вместо `127.0.0.1` напишите `0.0.0.0`. Windows спросит, пускать ли программу через брандмауэр.
 
-    Чтобы сервер был виден другим машинам в сети, вместо `127.0.0.1` укажите `0.0.0.0`. Windows может спросить разрешение брандмауэра — без ответа с других компьютеров порт закрыт.
+11. Первый запрос с Chandra или SAGE скачает веса в `C:\Users\<имя>\.cache\huggingface`. Пока качается, в интерфейсе висит загрузка. Старые чужие модели из кэша:
 
-12. Первый запрос с Chandra или SAGE качает веса с Hugging Face в кэш пользователя (обычно `C:\Users\<имя>\.cache\huggingface`). Пока идёт загрузка, задача в интерфейсе стоит на фазе загрузки. Повторный запрос той же модели веса не качает. Старый кэш других моделей чистится так: `python scripts/cleanup_old_hf_cache.py` из корня репозитория, при активированном `.venv`.
+    ```powershell
+    python scripts/cleanup_old_hf_cache.py
+    ```
 
-## Linux
+Скрипт `scripts\install.ps1` ставит только базовые пакеты. Политику PowerShell и Chandra он не трогает.
 
-Шаги рассчитаны на Debian и Ubuntu с `apt`. На другом дистрибутиве те же пакеты называются иначе; порядок не меняется: Python 3.11 с модулем `venv`, системные библиотеки для OpenCV, клон, `.venv`, один движок, uvicorn из корня репозитория.
+## Установка на Linux
 
-1. Обновите список пакетов и поставьте базу. `sudo` спросит пароль.
+Ниже команды для Debian и Ubuntu.
+
+1. Поставьте системные пакеты.
 
    ```bash
    sudo apt-get update
-   sudo apt-get install -y --no-install-recommends \
-     git python3 python3-venv python3-pip \
-     libgl1 libglib2.0-0
+   sudo apt-get install -y --no-install-recommends git python3 python3-venv python3-pip libgl1 libglib2.0-0
    ```
 
-   `python3-venv` обязателен. Без него `python3 -m venv` падает с текстом `ensurepip is not available`, и окружение не создаётся. `libgl1` и `libglib2.0-0` нужны OpenCV, без них импорт падает уже при старте распознавания.
+   `python3-venv` нужен обязательно: без него `python3 -m venv` пишет `ensurepip is not available`. `libgl1` и `libglib2.0-0` нужны для картинок, без них распознавание падает на импорте.
 
-2. Проверьте версию:
+2. Проверьте Python.
 
    ```bash
    python3 --version
    ```
 
-   Нужна 3.10, 3.11 или 3.12. Если системный Python старше, поставьте 3.11 из репозитория дистрибутива (`python3.11` и `python3.11-venv`) и дальше подставляйте `python3.11` вместо `python3`.
+   Нужна 3.10, 3.11 или 3.12. Если версия старше, поставьте `python3.11` и `python3.11-venv` и в командах ниже пишите `python3.11`.
 
-3. Клонируйте и зайдите в каталог с `app`:
+3. Склонируйте и зайдите в каталог.
 
    ```bash
    git clone https://github.com/Odaster/handwriting_recognition.git
    cd handwriting_recognition
-   test -d app && test -f requirements.txt && echo "корень репозитория"
    ```
 
-   Строка `корень репозитория` должна появиться. Если нет — `cd` не в тот каталог.
+   Здесь должны лежать `app` и `requirements.txt`.
 
-4. Создайте и включите окружение:
+4. Создайте окружение и включите его.
 
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
    ```
 
-   В начале строки появится `(.venv)`. Проверка:
+   Слева в строке будет `(.venv)`. Новое окно терминала это не помнит: зайдите в каталог и выполните `source` ещё раз.
 
-   ```bash
-   python -c "import sys; print(sys.executable)"
-   ```
-
-   Путь должен содержать `handwriting_recognition/.venv/`. Новое окно терминала активацию не помнит: снова `cd` в этот каталог и снова `source .venv/bin/activate`.
-
-5. Поставьте базу:
+5. Поставьте пакеты сайта.
 
    ```bash
    python -m pip install --upgrade pip
    python -m pip install -r requirements.txt
    ```
 
-   При ошибке SSL или прокси добавьте `--trusted-host pypi.org --trusted-host files.pythonhosted.org --trusted-host pypi.python.org`.
+   При ошибке сертификата те же `--trusted-host`, что в пункте 8 для Windows.
 
 6. Поставьте один движок.
 
-   Печать без видеокарты:
+   Печать:
 
    ```bash
    sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-rus
@@ -245,22 +207,17 @@ Chandra без рабочей CUDA веса не грузит. На 12 ГБ ви
 
    В списке должна быть `rus`.
 
-   Рукопись на CPU (TrOCR):
+   Рукопись на процессоре:
 
    ```bash
    python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
    python -m pip install -r requirements-trocr.txt
    ```
 
-   Chandra и SAGE. Сначала драйвер:
+   Chandra и SAGE:
 
    ```bash
    nvidia-smi
-   ```
-
-   Затем CUDA-torch и пакеты. Последняя команда возвращает CUDA-сборку, если предыдущая её подменила:
-
-   ```bash
    python -m pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
    python -m pip install -r requirements-chandra.txt
    python -m pip install -r requirements-trocr.txt
@@ -268,75 +225,71 @@ Chandra без рабочей CUDA веса не грузит. На 12 ГБ ви
    python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
    ```
 
-   Ожидается `True`. При `False` сервер не запускайте: повторите установку torch с индекса `cu121`.
+   `nvidia-smi` показывает карту. В проверке torch последнее слово `True`.
 
-7. Запуск из корня репозитория с активным `.venv`:
+7. Запустите сервер из этого каталога.
 
    ```bash
    python -m uvicorn app.main:app --host 127.0.0.1 --port 8080
    ```
 
-   Страница: http://127.0.0.1:8080 . Проверка: http://127.0.0.1:8080/api/health , в ответе `"status": "ok"`. Остановка — Ctrl+C. Для доступа из сети замените адрес на `0.0.0.0` и откройте порт в файрволе дистрибутива.
+   Страница: http://127.0.0.1:8080 . Проверка: http://127.0.0.1:8080/api/health . Для других машин хост `0.0.0.0`, порт откройте в файрволе.
 
-8. Первый запрос Chandra или SAGE скачивает веса в `~/.cache/huggingface`. Это один раз на модель. Старый кэш: `python scripts/cleanup_old_hf_cache.py` из корня, с активным `.venv`.
+8. Веса Chandra и SAGE попадут в `~/.cache/huggingface`. Старый кэш:
 
-## Движки (`engine`)
+   ```bash
+   python scripts/cleanup_old_hf_cache.py
+   ```
 
-| Id | Модель | Когда |
+Скрипт `scripts/install.sh` ставит только базовые пакеты и Tesseract. Chandra он не ставит.
+
+## Движки
+
+| Имя | Для чего | Модель |
 | --- | --- | --- |
-| `tesseract` | Tesseract rus | печать, CPU, без torch |
-| `trocr` | `kazars24/trocr-base-handwritten-ru` | курсив по словам, CPU, вход 384×384 |
-| `chandra` | `datalab-to/chandra-ocr-2` (~5B, CUDA) | страница / бланк / тетрадь |
+| `tesseract` | печать, без torch | Tesseract, язык `rus` |
+| `trocr` | курсив по словам, CPU, кадр 384×384 | `kazars24/trocr-base-handwritten-ru` |
+| `chandra` | страница, бланк, тетрадь, нужна CUDA | `datalab-to/chandra-ocr-2`, около 5B |
 
-## Корректоры (`corrector`)
+## Корректоры
 
-| Id | Что |
+| Имя | Что делает |
 | --- | --- |
-| `none` | только OCR |
+| `none` | ничего |
 | `spell` | словарь `pyspellchecker` |
-| `context` | SAGE 1.7B (`ai-forever/sage-v1.1.0` + `FRED-T5-1.7B`), затем `cursivefix` (pymorphy3, lookalike для OOV) |
+| `context` | SAGE 1.7B: `ai-forever/sage-v1.1.0` и токенайзер `ai-forever/FRED-T5-1.7B`, затем правки pymorphy3 |
 
-Chandra и корректор в VRAM **по очереди** (`app/models.py`).
+Chandra и SAGE на видеокарте идут по очереди.
 
-## Обработка Chandra
+Вход: PNG, JPEG, BMP, TIFF, WebP, PDF. Скан лучше цветной, 300 DPI, режим «фото».
 
-PDF → RGB 300 DPI. Enhance (deskew, линии, красные пометки). Страница — 3 горизонтальные полосы (`CHANDRA_STRIPS`). HTML лейаута → текст (`app/textout.py`): теги, оборванный `data-bbox`, петли декодера, повтор хвоста полосы. SAGE не трогает даты/прочерки бланка (`« 08 »`, `_____`).
-
-Лимит генерации: 1536 токенов/полоса, 2048 без полос (`CHANDRA_MAX_TOKENS`).
-
-## Вход / выход
-
-Вход: PNG, JPEG, BMP, TIFF, WebP, PDF. Скан: цвет, 300 DPI, режим «фото», без вырезания фона.
-
-Выход: `text`, `text_corrected`. Экспорт: `GET /api/export/{job_id}?format=txt|md|docx|xlsx|pdf&which=text|corrected`.
+Файл результата: `GET /api/export/{job_id}?format=txt|md|docx|xlsx|pdf&which=text|corrected`.
 
 ## API
 
 | Метод | Путь | |
 | --- | --- | --- |
-| GET | `/` | UI |
-| GET | `/api/health` | статус, ids моделей |
-| POST | `/api/recognize` | `file` + query `engine`, `corrector` → `{ job_id }` |
-| GET | `/api/progress/{job_id}` | прогресс, `text`, `text_corrected` |
+| GET | `/` | страница |
+| GET | `/api/health` | статус и имена моделей |
+| POST | `/api/recognize` | файл, в query `engine` и `corrector`, в ответе `job_id` |
+| GET | `/api/progress/{job_id}` | ход работы и текст |
 | GET | `/api/export/{job_id}` | файл |
-| GET | `/api/metrics` | CPU / RAM / GPU |
+| GET | `/api/metrics` | CPU, память, видеокарта |
 
 ## Переменные
 
-| | по умолчанию | |
-| --- | --- | --- |
-| `HTR_MODEL` | `kazars24/trocr-base-handwritten-ru` | |
-| `HTR_BEAMS` | `4` | |
-| `CORRECTOR_MODEL` / `SAGE_MODEL` | `ai-forever/sage-v1.1.0` | |
-| `SAGE_TOKENIZER` | `ai-forever/FRED-T5-1.7B` | |
-| `SAGE_BEAMS` | `1` (1.7B) | |
-| `CHANDRA_PROMPT` | `ocr` | `ocr_layout` — markdown лейаута |
-| `CHANDRA_ENHANCE` | `1` | |
-| `CHANDRA_STRIPS` | `3` | `1` — целая страница |
-| `CHANDRA_REFINE` | `0` | второй проход Chandra |
-| `CHANDRA_MAX_TOKENS` | `1536` / `2048` | |
-| `TESSERACT_CMD` | | путь к `tesseract.exe`, если его нет в PATH |
+| Имя | По умолчанию |
+| --- | --- |
+| `HTR_MODEL` | `kazars24/trocr-base-handwritten-ru` |
+| `HTR_BEAMS` | `4` |
+| `CORRECTOR_MODEL`, `SAGE_MODEL` | `ai-forever/sage-v1.1.0` |
+| `SAGE_TOKENIZER` | `ai-forever/FRED-T5-1.7B` |
+| `SAGE_BEAMS` | `1` |
+| `CHANDRA_PROMPT` | `ocr`. Другое значение: `ocr_layout` |
+| `CHANDRA_ENHANCE` | `1` |
+| `CHANDRA_STRIPS` | `3`. Значение `1` — вся страница сразу |
+| `CHANDRA_REFINE` | `0` |
+| `CHANDRA_MAX_TOKENS` | `1536` на полосу, `2048` если полос нет |
+| `TESSERACT_CMD` | путь к `tesseract.exe`, если его нет в PATH |
 
-## Ограничения
-
-Tesseract не читает курсив. Chandra путает похожие буквы и может подставить другое словарное слово. SAGE чинит опечатки, не смысл. `CHANDRA_REFINE=1` дописывает текст.
+Tesseract курсив не читает. Chandra путает похожие буквы и иногда подставляет другое слово. SAGE правит опечатки, смысл не меняет. `CHANDRA_REFINE=1` дописывает текст, лучше не включать.
